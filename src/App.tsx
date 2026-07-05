@@ -127,24 +127,24 @@ export default function App() {
     hpPercent: 100,
   });
 
-    // --- HÀM BẮT ĐẦU GAME KÈM XÁC THỰC PI ---
+  // --- MẸO THÔNG MINH: ĐỔI TÊN HÀM ĐỂ KHÔNG CẦN SỬA NÚT BẤM PHÍA DƯỚI ---
   const handleStartGame = async () => {
-    const loginSuccess = await authPiNetwork();
-    if (loginSuccess) {
-      setGameState("PLAYING");
+    try {
+      const scopes = ['username', 'payments'];
+      // Gọi trực tiếp hộp thoại đăng nhập của Pi khi người chơi bấm nút
+      const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
+        console.log("Giao dịch treo:", payment);
+      });
+      
+      alert(`Chào mừng Pioneer: ${authResult.user.username}`);
+      setGameState("PLAYING"); // Đăng nhập xong mới cho phép vào chơi game
+      
+    } catch (error) {
+      console.error("Lỗi đăng nhập Pi:", error);
+      alert("Bạn cần cấp quyền đăng nhập tài khoản Pi để có thể trải nghiệm game!");
     }
   };
-    // --- TỰ ĐỘNG GỌI ĐĂNG NHẬP KHI NGƯỜI CHƠI VÀO GAME ---
   
-  useEffect(() => {
-    const autoLogin = async () => {
-      // Đợi 2 giây cho hệ thống Pi tải xong rồi mới gọi pop-up
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await authPiNetwork();
-    };
-    autoLogin();
-  }, []);
-  // ----------------------------------------------------
   
   
 
