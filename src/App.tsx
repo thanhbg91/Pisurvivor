@@ -1,3 +1,5 @@
+declare const Pi: any;
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   Play, Flame, Shield, Activity, Sparkles, RotateCcw, Heart, Zap,
@@ -87,6 +89,23 @@ interface HighScore {
 }
 
 export default function App() {
+    // --- CODE ĐĂNG NHẬP PI NETWORK ---
+  const authPiNetwork = async () => {
+    try {
+      const scopes = ['username', 'payments'];
+      const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
+        console.log("Giao dịch treo:", payment);
+      });
+      alert(`Chào mừng Pioneer: ${authResult.user.username}`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi xác thực Pi:", error);
+      alert("Bạn cần cấp quyền đăng nhập Pi để chơi game!");
+      return false;
+    }
+  };
+  // ---------------------------------
+  
   // ==========================================
   // REACT STATE (UI, Overlays, Persistent Upgrades)
   // ==========================================
@@ -107,6 +126,27 @@ export default function App() {
     xpPercent: 0,
     hpPercent: 100,
   });
+
+    // --- HÀM BẮT ĐẦU GAME KÈM XÁC THỰC PI ---
+  const handleStartGame = async () => {
+    const loginSuccess = await authPiNetwork();
+    if (loginSuccess) {
+      setGameState("PLAYING");
+    }
+  };
+    // --- TỰ ĐỘNG GỌI ĐĂNG NHẬP KHI NGƯỜI CHƠI VÀO GAME ---
+  
+  useEffect(() => {
+    const autoLogin = async () => {
+      // Đợi 2 giây cho hệ thống Pi tải xong rồi mới gọi pop-up
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await authPiNetwork();
+    };
+    autoLogin();
+  }, []);
+  // ----------------------------------------------------
+  
+  
 
   const [finalStats, setFinalStats] = useState({
     time: "00:00",
