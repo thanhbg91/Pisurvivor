@@ -961,23 +961,36 @@ export default function App() {
   // ==========================================
   // PERMANENT META UPGRADE SHOP HANDLERS
   // ==========================================
-  const buyShopUpgrade = (key: keyof typeof shopUpgrades, cost: number) => {
-    if (metaGold >= cost && shopUpgrades[key] < 5) {
-      setMetaGold((prev) => {
-        const next = prev - cost;
-        localStorage.setItem("pioneer_meta_gold", next.toString());
-        return next;
-      });
+  const buyShopUpgrade = async (key: keyof typeof shopUpgrades) => {
+  // 1. Tự động tính toán hoặc lấy giá tiền (cost) dựa trên cấu hình game của bạn
+  // Nếu game định nghĩa giá trong một object khác (ví dụ: upgradeCosts[key][currentLvl]), hãy thay thế cho đúng
+  const currentLvl = shopUpgrades[key] || 0;
+  const cost = 10; // Thay số 10 này bằng công thức tính giá tiền Pi thật của bạn (Ví dụ: (currentLvl + 1) * 5)
 
+  try {
+    // 2. Kích hoạt cổng thanh toán Pi Network qua hàm handlePiPayment của bạn
+    const paymentSuccess = await handlePiPayment(cost, `Nâng cấp ${key} lên cấp ${currentLvl + 1}`);
+
+    if (paymentSuccess) {
+      // 3. Thanh toán thành công bằng Pi -> Tiến hành cập nhật chỉ số vào cấu hình game
       setShopUpgrades((prev: any) => {
-        const next = { ...prev, [key]: prev[key] + 1 };
+        const next = { ...prev, [key]: (prev[key] || 0) + 1 };
         localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(next));
         return next;
       });
 
+      // Phát âm thanh và thông báo cho người chơi
       playSfx("upgrade");
+      alert("Nâng cấp thành công bằng Pi Network!");
+    } else {
+      alert("Giao dịch thanh toán Pi đã bị hủy bỏ hoặc thất bại.");
     }
-  };
+  } catch (error) {
+    console.error("Lỗi hệ thống khi xử lý thanh toán Pi:", error);
+    alert("Không thể kết nối đến Ví Pi. Vui lòng thử lại!");
+  }
+};
+
 
   const resetSaveData = () => {
     if (confirm("Are you sure you want to reset all permanent stats, high scores, and gold?")) {
