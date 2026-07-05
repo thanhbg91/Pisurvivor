@@ -217,7 +217,7 @@ export default function App() {
   // Persistent Meta-Progression Shop State (Saved in LocalStorage)
   const [metaGold, setMetaGold] = useState(() => {
     const saved = localStorage.getItem("pioneer_meta_gold");
-    return saved ? parseInt(saved, 10) : 0;
+    return saved ? parseInt(saved, 10) : 999999;
   });
 
   const [shopUpgrades, setShopUpgrades] = useState(() => {
