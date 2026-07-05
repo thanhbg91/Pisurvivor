@@ -127,23 +127,37 @@ export default function App() {
     hpPercent: 100,
   });
 
-  // --- MẸO THÔNG MINH: ĐỔI TÊN HÀM ĐỂ KHÔNG CẦN SỬA NÚT BẤM PHÍA DƯỚI ---
-  const handleStartGame = async () => {
-    try {
-      const scopes = ['username', 'payments'];
-      // Gọi trực tiếp hộp thoại đăng nhập của Pi khi người chơi bấm nút
-      const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
-        console.log("Giao dịch treo:", payment);
-      });
-      
-      alert(`Chào mừng Pioneer: ${authResult.user.username}`);
-      setGameState("PLAYING"); // Đăng nhập xong mới cho phép vào chơi game
-      
-    } catch (error) {
-      console.error("Lỗi đăng nhập Pi:", error);
-      alert("Bạn cần cấp quyền đăng nhập tài khoản Pi để có thể trải nghiệm game!");
-    }
-  };
+  // --- HỆ THỐNG TỰ ĐỘNG CHẶN VÀ GỌI ĐĂNG NHẬP PI THEO DÕI TRẠNG THÁI ---
+  
+  
+  // Chúng ta dùng chính hàm gameState của bạn để bắt bài nút bấm
+  useEffect(() => {
+    const checkPiAuth = async () => {
+      // Nếu game nhảy sang trạng thái PLAYING (do người chơi bấm nút vào game)
+      if (gameState === "PLAYING") {
+        try {
+          const scopes = ['username', 'payments'];
+          // Ép gọi hộp thoại đăng nhập của Pi lập tức
+          const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
+            console.log("Giao dịch treo:", payment);
+          });
+          
+          alert(`Chào mừng Pioneer: ${authResult.user.username}`);
+          // Đăng nhập thành công, giữ nguyên trạng thái chơi game
+          
+        } catch (error) {
+          console.error("Lỗi đăng nhập Pi:", error);
+          alert("Bạn cần cấp quyền đăng nhập tài khoản Pi để có thể trải nghiệm game!");
+          // Nếu bấm từ chối hoặc lỗi, đá người chơi ngược về màn hình chờ START
+          setGameState("START"); 
+        }
+      }
+    };
+    
+    checkPiAuth();
+  }, [gameState]);
+  // ---------------------------------------------------------------------
+  
   
   
   
