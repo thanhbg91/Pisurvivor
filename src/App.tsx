@@ -158,7 +158,53 @@ export default function App() {
     checkPiAuth();
   }, [gameState]);
   // ---------------------------------------------------------------------
-  
+    // --- HÀM GỌI VÍ PI TESTNET THANH TOÁN VẬT PHẨM ---
+  const handlePiPayment = async (amount: number, itemName: string) => {
+    try {
+      // 1. Tạo dữ liệu đơn hàng
+      const paymentData = {
+        amount: amount, // Số tiền Pi (Ví dụ: 15 hoặc 25)
+        memo: `Mua ${itemName} trong game Survivor pi`, // Ghi chú ví
+        metadata: { item_id: itemName.toLowerCase().replace(/\s+/g, '_') },
+      };
+
+      // 2. Định nghĩa các hàm callback xử lý vòng đời giao dịch của Pi
+      const callbacks = {
+        // Trình duyệt Pi Browser gọi khi giao dịch được tạo trên blockchain thành công
+        onReadyForServerApproval: (paymentId: string) => {
+          console.log("Giao dịch chuẩn bị phê duyệt:", paymentId);
+          // Đối với môi trường Sandbox thử nghiệm, chúng ta cho phép duyệt thẳng tự động
+          alert("Hệ thống đang phê duyệt đơn hàng...");
+        },
+        // Trình duyệt gọi khi người chơi đã nhập mật khẩu 24 từ và ký duyệt chuyển Pi
+        onReadyForServerCompletion: (paymentId: string, txid: string) => {
+          console.log("Người chơi đã ký chuyển tiền. TxID:", txid);
+          alert(`Thanh toán thành công ${amount} Pi! Bạn đã được nâng cấp.`);
+          
+          // --- CHÈN LOGIC NÂNG CẤP CHỈ SỐ GAME CỦA BẠN TẠI ĐÂY ---
+          // Ví dụ: logicNangCapVatPham(itemName);
+        },
+        // Gọi khi người dùng chủ động bấm nút hủy bỏ giao dịch/đóng ví
+        onCancel: (paymentId: string) => {
+          alert("Bạn đã hủy bỏ giao dịch thanh toán ví Pi.");
+        },
+        // Gọi khi hệ thống blockchain của Pi phát sinh lỗi mạng
+        onError: (error: any, payment?: any) => {
+          console.error("Lỗi giao dịch ví Pi:", error);
+          alert("Giao dịch thất bại. Vui lòng kiểm tra lại số dư ví Pi Testnet!");
+        }
+      };
+
+      // 3. Kích hoạt gọi ví Pi bật lên màn hình
+      await (window as any).Pi.createPayment(paymentData, callbacks);
+
+    } catch (error) {
+      console.error("Lỗi khởi tạo ví Pi:", error);
+      alert("Không thể kết nối đến Ví Pi Network!");
+    }
+  };
+  // ----------------------------------------------------
+
 
   const [finalStats, setFinalStats] = useState({
     time: "00:00",
