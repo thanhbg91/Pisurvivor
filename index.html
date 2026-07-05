@@ -6,10 +6,10 @@
     <title>Survivor pi</title>
     
     <!-- Nhúng thư viện Pi SDK chính thức -->
-    <script src="https://minepi.com"></script>
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     <script>
-      // Khởi tạo SDK trong môi trường Sandbox thử nghiệm
-      Pi.init({ version: "2.0", sandbox: true });
+      // Khởi tạo SDK gắn trực tiếp vào đối tượng window toàn cục
+      window.Pi.init({ version: "2.0", sandbox: true });
     </script>
   </head>
   <body>
