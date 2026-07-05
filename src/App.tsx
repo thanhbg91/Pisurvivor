@@ -2100,7 +2100,7 @@ export default function App() {
               : true
               ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
               : "bg-slate-100 text-brand-muted/50 border-brand-border"
-          }
+          }`
         >
 
                         {maxed ? (
