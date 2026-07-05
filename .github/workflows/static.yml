@@ -1,21 +1,15 @@
-# Workflow cấu hình tự động build và deploy ứng dụng Vite lên GitHub Pages
 name: Deploy Vite App to GitHub Pages
 
 on:
-  # Tự động chạy mỗi khi bạn push code mới lên nhánh main
   push:
     branches: ["main"]
-
-  # Cho phép bạn bấm nút chạy thủ công trong tab Actions
   workflow_dispatch:
 
-# Thiết lập quyền hạn cho GITHUB_TOKEN để có thể deploy lên Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Đảm bảo các lượt chạy đồng thời không bị xung đột, lượt chạy sau sẽ hủy lượt chạy trước
 concurrency:
   group: "pages"
   cancel-in-progress: true
@@ -24,7 +18,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps:deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout mã nguồn
@@ -35,11 +29,11 @@ jobs:
         with:
           node-version: 20
 
-      - name: Cài đặt các thư viện (Dependencies)
-        run: npm install
+      - name: Cài đặt các thư viện
+        run: npm install --legacy-peer-deps
         working-directory: ./Pisurvivor
 
-      - name: Biên dịch ứng dụng (Build Game)
+      - name: Biên dịch ứng dụng
         run: npm run build
         working-directory: ./Pisurvivor
 
@@ -49,7 +43,6 @@ jobs:
       - name: Tải lên sản phẩm đã build
         uses: actions/upload-pages-artifact@v3
         with:
-          # Trỏ chính xác vào thư mục dist nằm bên trong thư mục con Pisurvivor
           path: './Pisurvivor/dist'
 
       - name: Xuất bản lên GitHub Pages
