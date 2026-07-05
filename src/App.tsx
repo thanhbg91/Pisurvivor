@@ -969,7 +969,8 @@ export default function App() {
 
   try {
     // 2. Kích hoạt cổng thanh toán Pi Network qua hàm handlePiPayment của bạn
-    const paymentSuccess = await handlePiPayment(cost, `Nâng cấp ${key} lên cấp ${currentLvl + 1}`);
+    const paymentSuccess = await handlePiPayment(cost, key);
+    
 
     if (paymentSuccess) {
       // 3. Thanh toán thành công bằng Pi -> Tiến hành cập nhật chỉ số vào cấu hình game
