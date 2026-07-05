@@ -2091,17 +2091,18 @@ export default function App() {
                         </div>
                       </div>
 
-                      <button
-                        disabled={maxed || metaGold < item.cost}
-                        onClick={() => buyShopUpgrade(item.key as any, item.cost)}
-                        className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer min-w-[72px] rounded-lg ${
-                          maxed
-                            ? "bg-slate-100 text-brand-muted/40 border-brand-border"
-                            : metaGold >= item.cost
-                            ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
-                            : "bg-slate-100 text-brand-muted/50 border-brand-border"
-                        }`}
-                      >
+                              <button
+          disabled={maxed}
+          onClick={() => buyShopUpgrade(item.key as any, item.cost)}
+          className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center min-w-[70px] ${
+            maxed
+              ? "bg-slate-100 text-brand-muted/40 border-brand-border"
+              : true
+              ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
+              : "bg-slate-100 text-brand-muted/50 border-brand-border"
+          }
+        >
+
                         {maxed ? (
                           <span>MAXED</span>
                         ) : (
