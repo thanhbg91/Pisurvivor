@@ -127,29 +127,30 @@ export default function App() {
     hpPercent: 100,
   });
 
-  // --- HỆ THỐNG TỰ ĐỘNG CHẶN VÀ GỌI ĐĂNG NHẬP PI THEO DÕI TRẠNG THÁI ---
-  
-  
-  // Chúng ta dùng chính hàm gameState của bạn để bắt bài nút bấm
+  // --- HỆ THỐNG KIỂM TRA ĐĂNG NHẬP PI CHUẨN HOÀN THIỆN ---
   useEffect(() => {
     const checkPiAuth = async () => {
-      // Nếu game nhảy sang trạng thái PLAYING (do người chơi bấm nút vào game)
       if (gameState === "PLAYING") {
+        // Kiểm tra xem trước đó phiên làm việc này đã được xác thực chưa
+        const isAlreadyAuthed = sessionStorage.getItem("pi_authed");
+        if (isAlreadyAuthed === "true") {
+          return; // Đã đăng nhập rồi thì cho vào thẳng game, không gọi Pi SDK nữa
+        }
+
         try {
           const scopes = ['username', 'payments'];
-          // Ép gọi hộp thoại đăng nhập của Pi lập tức
           const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
             console.log("Giao dịch treo:", payment);
           });
           
           alert(`Chào mừng Pioneer: ${authResult.user.username}`);
-          // Đăng nhập thành công, giữ nguyên trạng thái chơi game
+          // Lưu trạng thái đã xác thực thành công vào bộ nhớ tạm của phiên chơi
+          sessionStorage.setItem("pi_authed", "true");
           
         } catch (error) {
           console.error("Lỗi đăng nhập Pi:", error);
           alert("Bạn cần cấp quyền đăng nhập tài khoản Pi để có thể trải nghiệm game!");
-          // Nếu bấm từ chối hoặc lỗi, đá người chơi ngược về màn hình chờ START
-          setGameState("START"); 
+          setGameState("START"); // Đá về màn hình chờ nếu lỗi hoặc từ chối
         }
       }
     };
@@ -157,9 +158,6 @@ export default function App() {
     checkPiAuth();
   }, [gameState]);
   // ---------------------------------------------------------------------
-  
-  
-  
   
 
   const [finalStats, setFinalStats] = useState({
