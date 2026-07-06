@@ -2547,6 +2547,14 @@ const buyShopUpgrade = (key: any) => {
                 </button>
               )}
 
+                        <button
+            onClick={() => handlePiPayment(0.1, "500 Vàng")}
+            className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 border border-amber-400 text-amber-900 rounded-md font-medium flex items-center justify-center gap-2 mt-2"
+          >
+            <Coins className="w-4 h-4" />
+            <span className="font-mono uppercase tracking-wider text-[10px]">Mua 500 Vàng (0.1 Pi)</span>
+          </button>
+              
               <button
                 onClick={() => setGameState("START")}
                 className="w-full py-3 bg-brand-card hover:bg-slate-50 border border-brand-border hover:border-brand-muted/40 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition cursor-pointer"
