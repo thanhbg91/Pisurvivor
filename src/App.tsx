@@ -140,6 +140,15 @@ export default function App() {
   // --- HỆ THỐNG KIỂM TRA ĐĂNG NHẬP PI CHUẨN HOÀN THIỆN ---
   useEffect(() => {
     const checkPiAuth = async () => {
+            if ((window as any).Pi && !((window as any).Pi.initialized)) {
+        try {
+          (window as any).Pi.init({ version: "2.0", sandbox: true });
+          (window as any).Pi.initialized = true;
+        } catch (e) {
+          console.error("Lỗi kích hoạt ví:", e);
+        }
+            }
+      
       if (gameState === "PLAYING") {
         // Kiểm tra xem trước đó phiên làm việc này đã được xác thực chưa
         const isAlreadyAuthed = sessionStorage.getItem("pi_authed");
