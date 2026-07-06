@@ -178,6 +178,17 @@ export default function App() {
   }, [gameState]);
   // ---------------------------------------------------------------------
   const handlePurchaseAndUpgrade = async (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
+        // --- KÍCH HOẠT VÍ NGAY KHI ẤN NÚT UPGRADE ---
+    if ((window as any).Pi && !((window as any).Pi.initialized)) {
+      try {
+        (window as any).Pi.init({ version: "2.0", sandbox: true });
+        (window as any).Pi.initialized = true;
+      } catch (e) {
+        console.error("Lỗi kích hoạt ví:", e);
+      }
+    }
+    // --------------------------------------------
+    
     const config = SHOP_CONFIG[key];
     const currentLevel = shopUpgrades[key] || 0;
 
