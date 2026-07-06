@@ -2003,3 +2003,340 @@ setFinalStats({
       };
     }
   };
+const handleTouchMove = (e: React.TouchEvent) => {
+    if (gameState !== "PLAYING" || !engineRef.current.joystick.active) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const clientX = touch.clientX - rect.left;
+    const clientY = touch.clientY - rect.top;
+
+    engineRef.current.joystick.curX = clientX;
+    engineRef.current.joystick.curY = clientY;
+  };
+
+  const handleTouchEnd = () => {
+    engineRef.current.joystick.active = false;
+  };
+
+  return (
+    <div className="min-h-screen bg-brand-bg text-slate-800 font-sans flex flex-col items-center justify-center p-4 relative overflow-hidden select-none geometric-grid">
+      {/* Absolute Aesthetic Background Glow Elements */}
+      <div className="absolute top-1/4 left-1/4 w-80 h-80 rounded-full bg-brand-accent/5 blur-3xl pointer-events-none pulse-grid"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none pulse-grid"></div>
+
+      {/* Main Container constrained to 9:16 optimized viewport */}
+      <div
+        ref={containerRef}
+        className="w-full max-w-[440px] h-[80vh] md:h-[84vh] aspect-[9/16] bg-brand-card rounded-2xl border-2 border-brand-border shadow-2xl flex flex-col relative overflow-hidden"
+      >
+        {/* Geometric Calibration Crosshairs on Corners */}
+        <div className="absolute top-2.5 left-2.5 text-[10px] font-mono text-brand-muted/20 pointer-events-none select-none">+</div>
+        <div className="absolute top-2.5 right-2.5 text-[10px] font-mono text-brand-muted/20 pointer-events-none select-none">+</div>
+        <div className="absolute bottom-2.5 left-2.5 text-[10px] font-mono text-brand-muted/20 pointer-events-none select-none">+</div>
+        <div className="absolute bottom-2.5 right-2.5 text-[10px] font-mono text-brand-muted/20 pointer-events-none select-none">+</div>
+
+        {/* ==========================================
+            AUDIO & PERFORMANCES HUD
+            ========================================== */}
+        <button
+          onClick={toggleMute}
+          className="absolute top-4 left-4 z-40 p-2 bg-brand-card border border-brand-border hover:border-brand-accent/40 rounded-lg cursor-pointer text-brand-muted transition geo-shadow-sm"
+        >
+          {isMuted ? <VolumeX className="w-4 h-4 text-rose-500" /> : <Volume2 className="w-4 h-4 text-brand-accent" />}
+        </button>
+
+        {/* ==========================================
+            1. START SCREEN LAYOUT
+            ========================================== */}
+        {gameState === "START" && (
+          <div className="absolute inset-0 z-30 flex flex-col justify-between p-6 overflow-y-auto bg-gradient-to-b from-slate-50 via-brand-card to-slate-100">
+            {/* Title Block */}
+            <div className="text-center mt-6">
+              <div className="flex items-center justify-center space-x-1.5 text-brand-accent font-bold tracking-widest text-[9px] uppercase mb-1 font-mono">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Casu-Roguelike Survival // V1.4</span>
+              </div>
+              <h1 className="text-4xl font-extrabold tracking-tighter text-slate-800 font-display uppercase leading-none">
+                PIONEER
+              </h1>
+              <h2 className="text-sm font-semibold tracking-[0.3em] text-brand-accent font-mono mt-0.5 uppercase">
+                SURVIVORS
+              </h2>
+            </div>
+
+            {/* Concentric Geometric Radar Scanner */}
+            <div className="my-4 flex flex-col items-center justify-center relative py-6">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {/* Subtle grid ticks or circles */}
+                <div className="w-32 h-32 rounded-full border border-brand-border/40 flex items-center justify-center">
+                  <div className="w-24 h-24 rounded-full border border-brand-border/60 border-dashed flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full border border-brand-accent/20 flex items-center justify-center"></div>
+                  </div>
+                </div>
+              </div>
+              {/* Centered high-tech space suit avatar icon */}
+              <div className="w-20 h-20 rounded-full bg-brand-card/90 border border-brand-border flex items-center justify-center relative z-10 geo-shadow-sm">
+                {/* Rotating radar laser scan line */}
+                <div className="absolute inset-1 rounded-full border border-indigo-500/25 animate-spin" style={{ animationDuration: '4s' }}>
+                  <div className="w-1/2 h-full bg-gradient-to-l from-indigo-500/20 to-transparent origin-right absolute left-0 top-0"></div>
+                </div>
+                {/* Simple helmet visor outline */}
+                <div className="w-11 h-11 rounded-xl bg-slate-100 border border-brand-border relative overflow-hidden flex flex-col items-center justify-center">
+                  <div className="w-8 h-4 rounded-b bg-brand-accent/20 border-b border-brand-accent/40 mt-1"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute top-1 right-2 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="mt-3.5 text-[9px] font-mono text-brand-muted uppercase tracking-widest">
+                Unit Core Status: Calibrated
+              </div>
+            </div>
+
+            {/* Play & Info Buttons */}
+            <div className="space-y-3 px-1">
+              <button
+                onClick={startNewGame}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/20 text-white font-bold rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer geo-shadow-indigo active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+              >
+                <Play className="w-4 h-4 fill-current text-white" />
+                <span className="font-display uppercase tracking-wider text-xs">Launch Pioneer Core</span>
+              </button>
+
+              <button
+                onClick={() => setShowTutorial(true)}
+                className="w-full py-2.5 bg-brand-card border border-brand-border hover:bg-slate-50 text-slate-700 font-bold rounded-lg cursor-pointer flex items-center justify-center space-x-2 transition text-xs geo-shadow-sm"
+              >
+                <HelpCircle className="w-4 h-4 text-brand-accent" />
+                <span className="font-display uppercase tracking-widest text-[10px]">Survival Protocols</span>
+              </button>
+            </div>
+
+            {/* Permanent Upgrades Matrix Shop */}
+            <div className="bg-brand-card border border-brand-border rounded-xl p-4 my-2.5">
+              <div className="flex items-center justify-between border-b border-brand-border pb-2.5 mb-3">
+                <div className="flex items-center space-x-2">
+                  <Coins className="w-4 h-4 text-brand-accent" />
+                  <span className="font-display font-bold text-xs uppercase tracking-wider text-slate-700">Base Engineering Shop</span>
+                </div>
+                <div className="bg-amber-500/10 border border-brand-accent/25 px-2.5 py-0.5 rounded text-xs text-brand-accent font-mono font-bold">
+                  {metaGold} ¢
+                </div>
+              </div>
+
+              {/* Individual Shop Upgrade Slots */}
+              <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
+                {[
+                  { key: "damage", label: "Plasma Accelerators", icon: <Zap className="w-3.5 h-3.5" />, cost: (shopUpgrades.damage + 1) * 20, desc: "+15% Damage scaling" },
+                  { key: "health", label: "Nanoshield Armor", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.health + 1) * 15, desc: "+15 Base Max HP" },
+                  { key: "speed", label: "Reactor Thrusters", icon: <Activity className="w-3.5 h-3.5" />, cost: (shopUpgrades.speed + 1) * 20, desc: "+10% Move speed" },
+                  { key: "magnet", label: "Quantum Harvester", icon: <Sparkles className="w-3.5 h-3.5" />, cost: (shopUpgrades.magnet + 1) * 15, desc: "+25px Attraction radius" },
+                  { key: "regen", label: "Nanite Repair Systems", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.regen + 1) * 25, desc: "+0.35 HP Regen/sec" },
+                ].map((item) => {
+                  const currentLvl = (shopUpgrades as any)[item.key];
+                  const maxed = currentLvl >= 5;
+                  return (
+                    <div key={item.key} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border-2 border-brand-border">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-brand-accent">{item.icon}</span>
+                          <span className="text-[11px] font-bold font-display uppercase tracking-wide text-slate-800">{item.label}</span>
+                        </div>
+                        <span className="text-[9px] text-brand-muted block leading-tight mt-0.5 font-sans">{item.desc}</span>
+                        {/* Custom analog power levels block indicator */}
+                        <div className="flex space-x-1 mt-1.5">
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <div
+                              key={i}
+                              className={`w-3.5 h-2 border border-brand-border ${
+                                i <= currentLvl ? "bg-brand-accent border-brand-accent" : "bg-slate-200"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+  disabled={maxed}
+  onClick={() => buyShopUpgrade(item.key)}
+  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition transform active:scale-95 min-w-[80px] text-center ${
+    maxed
+      ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+      : "bg-brand-accent text-white"
+  }`}
+
+                      >
+                        {maxed ? (
+                          <span>MAXED</span>
+                        ) : (
+                          <>
+                            <span className="text-[8px] opacity-80 uppercase leading-none">Upgrade</span>
+                            <span className="font-bold mt-0.5">{item.cost}¢</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* High Scores list */}
+            {highScores.length > 0 && (
+              <div className="bg-brand-card border border-brand-border rounded-xl p-3.5">
+                <div className="flex items-center space-x-2 text-brand-muted text-[10px] font-bold uppercase tracking-wider mb-2 font-mono">
+                  <Trophy className="w-4 h-4 text-brand-accent" />
+                  <span>Mission Log Records</span>
+                </div>
+                <div className="space-y-1.5 font-mono">
+                  {highScores.map((score, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-1.5 rounded-lg border-2 border-brand-border text-xs">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-brand-accent">0{idx + 1}.</span>
+                        <span className="text-slate-700">{score.time}</span>
+                      </div>
+                      <div className="flex items-center space-x-3.5">
+                        <span className="text-rose-400 font-bold">{score.kills} KILLS</span>
+                        <span className="text-indigo-400 font-bold">LV.{score.level}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* System Clear Button */}
+            <div className="text-center mt-1">
+              <button
+                onClick={resetSaveData}
+                className="text-[9px] text-brand-muted hover:text-rose-500 font-mono cursor-pointer transition underline uppercase tracking-wider"
+              >
+                Clear Saved Base Data
+              </button>
+            </div>
+          </div>
+        )}
+               {/* ==========================================
+            TUTORIAL MODAL
+            ========================================== */}
+        {showTutorial && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-brand-card border-2 border-brand-border rounded-xl p-5 w-full max-w-[380px] space-y-4 geo-shadow">
+              <h3 className="text-lg font-bold tracking-tight text-center text-brand-accent font-display uppercase">
+                Survival Protocols
+              </h3>
+              <div className="space-y-3 text-xs text-slate-600">
+                <div className="flex items-start space-x-3">
+                  <div className="w-5 h-5 bg-brand-card border border-brand-border rounded flex items-center justify-center shrink-0 font-mono text-[9px] text-brand-accent font-bold">
+                    NAV
+                  </div>
+                  <p className="font-sans leading-tight">Slide joystick on the bottom half of the screen, or use <span className="text-brand-accent font-mono font-bold">WASD/Arrows</span> on desktop.</p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-5 h-5 bg-brand-card border border-brand-border rounded flex items-center justify-center shrink-0 font-mono text-[9px] text-brand-accent font-bold">
+                    WEP
+                  </div>
+                  <p className="font-sans leading-tight">Weapons <span className="text-brand-accent font-bold">autofire automatically</span> targeting the nearest invader. Focus strictly on navigation.</p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-5 h-5 bg-brand-card border border-brand-border rounded flex items-center justify-center shrink-0 font-mono text-[9px] text-brand-accent font-bold">
+                    CORE
+                  </div>
+                  <p className="font-sans leading-tight">Gather glowing energy orbs dropped by targets to upgrade system specs during active deployment.</p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-5 h-5 bg-brand-card border border-brand-border rounded flex items-center justify-center shrink-0 font-mono text-[9px] text-brand-accent font-bold">
+                    META
+                  </div>
+                  <p className="font-sans leading-tight">Accumulate currency to unlock permanent engineering core upgrades inside the base shop.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTutorial(false)}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg cursor-pointer text-xs transition font-display uppercase tracking-wider"
+              >
+                Acknowledge Protocols
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            2. PLAYING ACTIVE HUD & CANVAS
+            ========================================== */}
+        {gameState === "PLAYING" && (
+          <div className="absolute inset-0 flex flex-col pointer-events-none">
+            {/* Top Stat Progress HUD Overlay */}
+            <div className="p-4 z-20 flex flex-col space-y-1 bg-gradient-to-b from-slate-950/80 via-slate-950/20 to-transparent">
+              {/* Dashboard band */}
+              <div className="grid grid-cols-3 gap-2.5 mb-1.5 pointer-events-none">
+                {/* Level box */}
+                <div className="bg-slate-900/90 border border-slate-800 px-3 py-1 rounded-lg flex items-center justify-center space-x-1.5 text-center">
+                  <span className="text-slate-400 text-[8px] font-mono uppercase">Level</span>
+                  <span className="text-indigo-400 font-bold font-display text-xs">{gameStats.level}</span>
+                </div>
+                {/* Time box */}
+                <div className="bg-slate-900/90 border border-slate-800 px-3 py-1 rounded-lg flex items-center justify-center space-x-1.5 text-center">
+                  <span className="text-slate-400 text-[8px] font-mono uppercase">Time</span>
+                  <span className="text-slate-200 font-bold font-mono text-[11px] tracking-wider">{gameStats.time}</span>
+                </div>
+                {/* Kills box */}
+                <div className="bg-slate-900/90 border border-rose-950/50 px-3 py-1 rounded-lg flex items-center justify-center space-x-1.5 text-center">
+                  <Skull className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="text-rose-400 font-bold font-mono text-[11px]">{gameStats.kills}</span>
+                </div>
+              </div>
+
+              {/* XP progress bar */}
+              <div className="w-full h-3 bg-slate-950/60 border border-slate-800 rounded-md overflow-hidden relative">
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400 transition-all duration-300"
+                  style={{ width: `${gameStats.xpPercent}%` }}
+                />
+                {/* Grid Segment Markers overlay */}
+                <div className="absolute inset-0 flex justify-between pointer-events-none px-1">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+                    <div key={i} className="w-[1px] h-full bg-slate-800/40" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Player Top HUD Health & Gold indicator */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center space-x-2">
+                  <Heart className="w-3.5 h-3.5 text-rose-500 fill-current shrink-0" />
+                  <div className="w-24 h-2 bg-slate-950/60 border border-slate-800 rounded overflow-hidden relative">
+                    <div
+                      className="h-full bg-gradient-to-r from-rose-600 to-rose-400 transition-all duration-150"
+                      style={{ width: `${gameStats.hpPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-rose-400 font-mono font-bold">{gameStats.hpPercent}%</span>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-brand-accent bg-amber-500/10 border border-brand-accent/20 px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>{gameStats.gold}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic Interactive Game Play Canvas Element */}
+        {gameState === "PLAYING" && (
+          <canvas
+            ref={canvasRef}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="w-full h-full block bg-[#0b0f19]"
+          />
+        )}
+
+        {/* ==========================================
+            3. LEVEL UP OVERLAY SELECTION
+            ========================================== */}
+        {isLevelUp && (
+        
