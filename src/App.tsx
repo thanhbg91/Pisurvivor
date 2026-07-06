@@ -89,12 +89,13 @@ interface HighScore {
 }
 const GOLD_PER_PI = 100;
 const SHOP_CONFIG = {
-  damage: { name: "PLASMA ACCELERATORS", baseCost: 500, maxLevel: 5, step: 500 },
-  health: { name: "NANOSHIELD ARMOR", baseCost: 400, maxLevel: 5, step: 400 },
-  speed: { name: "ION THRUSTERS", baseCost: 300, maxLevel: 5, step: 300 },
-  magnet: { name: "GRAVITY MAGNET", baseCost: 200, maxLevel: 5, step: 200 },
-  regen: { name: "BIOMETRIC REGEN", baseCost: 600, maxLevel: 5, step: 600 }
+  health: { name: "NANOSHIELD ARMOR", baseCost: 15, maxLevel: 5, step: 15 },
+  speed: { name: "REACTOR THRUSTERS", baseCost: 20, maxLevel: 5, step: 20 },
+  damage: { name: "PLASMA ACCELERATORS", baseCost: 25, maxLevel: 5, step: 25 },
+  magnet: { name: "GRAVITY MAGNET", baseCost: 10, maxLevel: 5, step: 10 },
+  regen: { name: "BIOMETRIC REGEN", baseCost: 30, maxLevel: 5, step: 30 }
 };
+
 
 
 export default function App() {
@@ -1032,10 +1033,12 @@ export default function App() {
   // ====================================================
 // // PERMANENT META UPGRADE SHOP HANDLERS
 // ====================================================
-const buyShopUpgrade = (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
-  handlePurchaseAndUpgrade(key);
+const buyShopUpgrade = (key: any) => {
+  const standardizedKey = String(key).toLowerCase() as "damage" | "health" | "speed" | "magnet" | "regen";
+  handlePurchaseAndUpgrade(standardizedKey);
   playSfx("upgrade");
 };
+
 
   const resetSaveData = () => {
     if (confirm("Are you sure you want to reset all permanent stats, high scores, and gold?")) {
