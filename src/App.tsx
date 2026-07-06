@@ -232,7 +232,7 @@ export default function App() {
     // 1. Gửi lệnh phê duyệt (Approve) lên Server của bạn
     onReadyForServerApproval: async (paymentId: string) => {
       try {
-        const response = await fetch('https://abc.com', {
+        const response = await fetch('https://pi-game-backend.onrender.com/api/pi/approve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paymentId })
@@ -246,7 +246,7 @@ export default function App() {
     // 2. Gửi lệnh hoàn thành (Complete) lên Server của bạn khi người dùng ký ví xong
     onReadyForServerCompletion: async (paymentId: string, txid: string) => {
       try {
-        const response = await fetch('https://abc.com', {
+        const response = await fetch('https://pi-game-backend.onrender.com/api/pi/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paymentId, txid })
