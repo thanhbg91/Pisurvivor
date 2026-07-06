@@ -1497,3 +1497,509 @@ const buyShopUpgrade = (key: any) => {
         const finalKills = engine.player.kills;
         const finalLevel = engine.player.level;
           
+setFinalStats({
+          time: finalTime,
+          kills: finalKills,
+          gold: earnedGold,
+          level: finalLevel,
+          unlockedGold: earnedGold
+        });
+
+        setHighScores((prev) => {
+          const next = [
+            ...prev,
+            {
+              time: finalTime,
+              kills: finalKills,
+              gold: earnedGold,
+              level: finalLevel,
+              date: new Date().toLocaleDateString(),
+            },
+          ]
+            .sort((a, b) => b.kills - a.kills)
+            .slice(0, 5);
+          localStorage.setItem("pioneer_highscores", JSON.stringify(next));
+          return next;
+        });
+
+        return; // stop loops
+      }
+
+      // 13. SYNC GRAPHIC RENDER COORDINATES (SCROLLING CAMERA)
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      // Draw infinite background grid
+      const gridSpacing = 60;
+      const offsetX = -engine.player.x % gridSpacing;
+      const offsetY = -engine.player.y % gridSpacing;
+      ctx.strokeStyle = "rgba(226, 184, 94, 0.07)";
+      ctx.lineWidth = 1;
+
+      for (let gx = offsetX; gx < canvas.width; gx += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, canvas.height);
+        ctx.stroke();
+      }
+      for (let gy = offsetY; gy < canvas.height; gy += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(canvas.width, gy);
+        ctx.stroke();
+      }
+
+      // Parallax static starry field depth
+      for (let s = 0; s < 45; s++) {
+        const starSpeed = 0.25;
+        const starX = ((s * 419) % canvas.width) - (engine.player.x * starSpeed) % canvas.width;
+        const starY = ((s * 331) % canvas.height) - (engine.player.y * starSpeed) % canvas.height;
+        const finalX = (starX + canvas.width) % canvas.width;
+        const finalY = (starY + canvas.height) % canvas.height;
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.1 + (s % 4) * 0.2})`;
+        ctx.fillRect(finalX, finalY, (s % 2) + 1, (s % 2) + 1);
+      }
+
+      // Draw XP/Gold items
+      engine.items.forEach((item) => {
+        const itemX = item.x - engine.player.x + cx;
+        const itemY = item.y - engine.player.y + cy;
+
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = item.color;
+        ctx.fillStyle = item.color;
+
+        ctx.beginPath();
+        ctx.arc(itemX, itemY, item.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0; // reset
+      });
+
+      // Draw Particles
+      engine.particles.forEach((p) => {
+        const px = p.x - engine.player.x + cx;
+        const py = p.y - engine.player.y + cy;
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha;
+        ctx.fillRect(px - p.size / 2, py - p.size / 2, p.size, p.size);
+      });
+      ctx.globalAlpha = 1.0; // Reset alpha
+
+      // Draw Projectiles
+      engine.projectiles.forEach((p) => {
+        const px = p.x - engine.player.x + cx;
+        const py = p.y - engine.player.y + cy;
+
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      // Draw Orbiting Shield weapon orbs on camera coords
+      if (shieldWpn) {
+        const orbCount = shieldWpn.level >= 5 ? 4 : shieldWpn.level >= 4 ? 3 : shieldWpn.level >= 2 ? 2 : 1;
+        const orbitRadius = shieldWpn.level >= 4 ? 75 : 60;
+        for (let i = 0; i < orbCount; i++) {
+          const angle = engine.shieldAngle + (i / orbCount) * Math.PI * 2;
+          const sx = Math.cos(angle) * orbitRadius + cx;
+          const sy = Math.sin(angle) * orbitRadius + cy;
+
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = "#34d399";
+          ctx.fillStyle = "#10b981";
+          ctx.beginPath();
+          ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Connect laser arc lines to player center
+          ctx.strokeStyle = "rgba(16, 185, 129, 0.25)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      // Draw Swarm Enemies
+      engine.enemies.forEach((e) => {
+        const ex = e.x - engine.player.x + cx;
+        const ey = e.y - engine.player.y + cy;
+
+        // Oscillating spidery/tentacle monster legs wiggling dynamically
+        const moveOsc = Math.sin(engine.gameTime * 14 + parseInt(e.id) * 3);
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = Math.max(1.5, e.size * 0.15);
+
+        // Draw 6 wiggly legs
+        for (let leg = 0; leg < 6; leg++) {
+          const angle = (leg / 6) * Math.PI * 2 + moveOsc * 0.25;
+          const lx = ex + Math.cos(angle) * (e.size * 1.35);
+          const ly = ey + Math.sin(angle) * (e.size * 1.35);
+
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          // Curve slightly to look organic
+          ctx.quadraticCurveTo(
+            ex + Math.cos(angle + 0.2) * (e.size * 0.8),
+            ey + Math.sin(angle + 0.2) * (e.size * 0.8),
+            lx,
+            ly
+          );
+          ctx.stroke();
+        }
+
+        // Core cartoon monster blob shape (squishy)
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        const rx = e.size * (1 + moveOsc * 0.06);
+        const ry = e.size * (1 - moveOsc * 0.06);
+        ctx.ellipse(ex, ey, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Small cute/scary monster horns wiggling on top
+        ctx.fillStyle = e.color;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+        ctx.lineWidth = 1;
+        // Left horn
+        ctx.beginPath();
+        ctx.moveTo(ex - e.size * 0.5, ey - e.size * 0.7);
+        ctx.lineTo(ex - e.size * 0.8, ey - e.size * 1.25 + moveOsc * 1.5);
+        ctx.lineTo(ex - e.size * 0.2, ey - e.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Right horn
+        ctx.beginPath();
+        ctx.moveTo(ex + e.size * 0.2, ey - e.size * 0.7);
+        ctx.lineTo(ex + e.size * 0.8, ey - e.size * 1.25 - moveOsc * 1.5);
+        ctx.lineTo(ex + e.size * 0.5, ey - e.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Angry Monster Face
+        // 1 or 2 glowing angry eyes based on size
+        if (e.size < 11) {
+          // Large Cyclops Eye for smaller drones
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(ex, ey - e.size * 0.15, e.size * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+          // Angry red pupil
+          ctx.fillStyle = "#ef4444";
+          ctx.beginPath();
+          ctx.arc(ex + (moveOsc > 0 ? 0.7 : -0.7), ey - e.size * 0.15, e.size * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Two angry diagonal white eyes with red pupils for larger foes
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.ellipse(ex - e.size * 0.3, ey - e.size * 0.2, e.size * 0.22, e.size * 0.12, -Math.PI / 6, 0, Math.PI * 2);
+          ctx.ellipse(ex + e.size * 0.3, ey - e.size * 0.2, e.size * 0.22, e.size * 0.12, Math.PI / 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Angry red pupils
+          ctx.fillStyle = "#f43f5e";
+          ctx.beginPath();
+          ctx.arc(ex - e.size * 0.25, ey - e.size * 0.2, e.size * 0.08, 0, Math.PI * 2);
+          ctx.arc(ex + e.size * 0.25, ey - e.size * 0.2, e.size * 0.08, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Angry eyebrows
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(ex - e.size * 0.5, ey - e.size * 0.38);
+          ctx.lineTo(ex - e.size * 0.1, ey - e.size * 0.22);
+          ctx.moveTo(ex + e.size * 0.5, ey - e.size * 0.38);
+          ctx.lineTo(ex + e.size * 0.1, ey - e.size * 0.22);
+          ctx.stroke();
+        }
+
+        // Angry growling mouth with tiny teeth (if size is big enough)
+        if (e.size >= 12) {
+          ctx.fillStyle = "#1e293b";
+          ctx.beginPath();
+          ctx.arc(ex, ey + e.size * 0.25, e.size * 0.2, 0, Math.PI);
+          ctx.fill();
+          // Little fangs
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.moveTo(ex - e.size * 0.12, ey + e.size * 0.25);
+          ctx.lineTo(ex - e.size * 0.07, ey + e.size * 0.35);
+          ctx.lineTo(ex - e.size * 0.02, ey + e.size * 0.25);
+          ctx.moveTo(ex + e.size * 0.02, ey + e.size * 0.25);
+          ctx.lineTo(ex + e.size * 0.07, ey + e.size * 0.35);
+          ctx.lineTo(ex + e.size * 0.12, ey + e.size * 0.25);
+          ctx.fill();
+        }
+
+        // Anti-Pi Logo Badge (Prohibition circle over π)
+        const badgeRadius = Math.max(5.5, e.size * 0.38);
+        const bx = ex;
+        const by = ey + (e.size >= 12 ? -e.size * 0.55 : e.size * 0.3); // Position on forehead if large, else lower torso
+
+        // White background circle
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(bx, by, badgeRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Red prohibition outer ring
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = Math.max(1, badgeRadius * 0.18);
+        ctx.beginPath();
+        ctx.arc(bx, by, badgeRadius - 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Dark Pi (π) text inside
+        ctx.fillStyle = "#1e293b";
+        const fontSize = Math.max(6, Math.round(badgeRadius * 1.25));
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("π", bx, by);
+
+        // Red diagonal slash
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = Math.max(1, badgeRadius * 0.18);
+        ctx.beginPath();
+        const offset = badgeRadius * 0.707;
+        ctx.moveTo(bx - offset, by - offset);
+        ctx.lineTo(bx + offset, by + offset);
+        ctx.stroke();
+
+        // Monster HP Bar (Goliath or Boss Only)
+        if (e.type === "goliath" || e.type === "boss") {
+          const barW = e.size * 2;
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(ex - barW / 2, ey - e.size - 8, barW, 4);
+          ctx.fillStyle = "#3b82f6";
+          ctx.fillRect(ex - barW / 2, ey - e.size - 8, barW * (e.hp / e.maxHp), 4);
+        }
+      });
+
+      // Draw Pioneer Player (Cartoon character with Pi badge)
+      const playerSize = engine.player.size;
+      const legOsc = Math.sin(engine.gameTime * 18);
+
+      // Cute red cartoon boots
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(cx - 5, cy + playerSize + 1 + legOsc * 2, 3.5, 0, Math.PI * 2);
+      ctx.arc(cx + 5, cy + playerSize + 1 - legOsc * 2, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Boot soles
+      ctx.fillStyle = "#b91c1c";
+      ctx.fillRect(cx - 8, cy + playerSize + 3 + legOsc * 2, 6, 2);
+      ctx.fillRect(cx + 2, cy + playerSize + 3 - legOsc * 2, 6, 2);
+
+      // Jetpack exhaust thruster flames
+      ctx.fillStyle = "#f59e0b";
+      ctx.fillRect(cx - playerSize - 1, cy + 3 + Math.random() * 3, 3, 8);
+      ctx.fillStyle = "#ef4444";
+      ctx.fillRect(cx - playerSize - 1, cy + 5 + Math.random() * 2, 2, 4);
+
+      // Main suit body (Cute indigo space jumpsuit)
+      ctx.fillStyle = "#6366f1";
+      ctx.beginPath();
+      ctx.arc(cx, cy, playerSize, 0, Math.PI * 2);
+      ctx.fill();
+
+      // White round cartoon gloves
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(cx - playerSize - 1, cy + 1 + legOsc * 0.5, 3, 0, Math.PI * 2);
+      ctx.arc(cx + playerSize + 1, cy + 1 - legOsc * 0.5, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bubble Helmet visor containing cute cartoon face
+      const helmetRadius = playerSize * 0.85;
+      const hx = cx;
+      const hy = cy - playerSize * 0.3;
+
+      // Outer Helmet boundary
+      ctx.fillStyle = "#e0e7ff";
+      ctx.beginPath();
+      ctx.arc(hx, hy, helmetRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Face skin
+      ctx.fillStyle = "#ffedd5";
+      ctx.beginPath();
+      ctx.arc(hx, hy, helmetRadius - 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cute blush cheeks
+      ctx.fillStyle = "rgba(244, 63, 94, 0.4)";
+      ctx.beginPath();
+      ctx.arc(hx - 3.5, hy + 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(hx + 3.5, hy + 2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sparkling eyes
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(hx - 2.5, hy - 0.5, 1.5, 0, Math.PI * 2);
+      ctx.arc(hx + 2.5, hy - 0.5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Eye highlights
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(hx - 2.9, hy - 0.9, 0.5, 0, Math.PI * 2);
+      ctx.arc(hx + 2.1, hy - 0.9, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cute smile
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(hx, hy + 2, 2, 0, Math.PI);
+      ctx.stroke();
+
+      // Visor glare reflection
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(hx, hy, helmetRadius - 2.5, -Math.PI / 2.5, -Math.PI / 8);
+      ctx.stroke();
+
+      // Golden Round Chest Badge with Pi logo
+      const pBadgeRadius = 4.5;
+      const pbx = cx;
+      const pby = cy + playerSize * 0.45;
+
+      ctx.fillStyle = "#fbbf24";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(pbx, pby, pBadgeRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Dark Pi text inside badge
+      ctx.fillStyle = "#1e1b4b";
+      ctx.font = "bold 9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("π", pbx, pby);
+
+      // Floating HP Bar above player
+      const pHealthPercent = engine.player.hp / engine.player.maxHp;
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(cx - 15, cy - 26, 30, 4);
+      ctx.fillStyle = pHealthPercent > 0.4 ? "#22c55e" : "#ef4444";
+      ctx.fillRect(cx - 15, cy - 26, 30 * Math.max(0, pHealthPercent), 4);
+
+      // Draw Damage / XP floating text overlays
+      engine.damageTexts.forEach((txt) => {
+        const tx = txt.x - engine.player.x + cx;
+        const ty = txt.y - engine.player.y + cy;
+        ctx.fillStyle = txt.color;
+        ctx.globalAlpha = Math.max(0, txt.alpha);
+        ctx.font = "bold 11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(txt.text, tx, ty);
+      });
+      ctx.globalAlpha = 1.0;
+
+      // Draw Virtual Touch Joystick overlay if touched
+      if (engine.joystick.active) {
+        const j = engine.joystick;
+        const jdx = j.curX - j.startX;
+        const jdy = j.curY - j.startY;
+        const jdist = Math.sqrt(jdx * jdx + jdy * jdy);
+        const limitDist = Math.min(jdist, 55);
+        const knobX = j.startX + (jdist > 0 ? (jdx / jdist) * limitDist : 0);
+        const knobY = j.startY + (jdist > 0 ? (jdy / jdist) * limitDist : 0);
+
+        // Outer concentric thin gold alignment circle
+        ctx.strokeStyle = "rgba(226, 184, 94, 0.45)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(j.startX, j.startY, 45, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Outer dashed alignment circle
+        ctx.strokeStyle = "rgba(99, 102, 241, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.setLineDash([3, 3]);
+        ctx.arc(j.startX, j.startY, 55, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line dash
+
+        // Vector calibration crosshairs
+        ctx.strokeStyle = "rgba(99, 102, 241, 0.15)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(j.startX - 65, j.startY);
+        ctx.lineTo(j.startX + 65, j.startY);
+        ctx.moveTo(j.startX, j.startY - 65);
+        ctx.lineTo(j.startX, j.startY + 65);
+        ctx.stroke();
+
+        // Inner solid joystick center knob
+        ctx.fillStyle = "rgba(99, 102, 241, 0.4)";
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Knob gold ring outline
+        ctx.strokeStyle = "#e2b85e";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 18, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Sync variables cleanly to React state for UI overlays (Debounced inside tick)
+      if (Math.random() < 0.15) {
+        setGameStats({
+          time: timeStr,
+          kills: engine.player.kills,
+          gold: engine.player.gold,
+          level: engine.player.level,
+          xpPercent: Math.floor((engine.player.xp / engine.player.xpNeeded) * 100),
+          hpPercent: Math.floor((engine.player.hp / engine.player.maxHp) * 100),
+        });
+      }
+
+      animId = requestAnimationFrame(gameLoop);
+    };
+
+    animId = requestAnimationFrame(gameLoop);
+    return () => cancelAnimationFrame(animId);
+  }, [gameState]);
+
+  // Handle touch joystick event listeners directly on parent
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (gameState !== "PLAYING" || isLevelUp) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const clientX = touch.clientX - rect.left;
+    const clientY = touch.clientY - rect.top;
+
+    // Joystick fires anywhere on bottom half of game container
+    if (clientY > canvas.height * 0.4) {
+      engineRef.current.joystick = {
+        active: true,
+        startX: clientX,
+        startY: clientY,
+        curX: clientX,
+        curY: clientY,
+      };
+    }
+  };
