@@ -87,6 +87,15 @@ interface HighScore {
   level: number;
   date: string;
 }
+const GOLD_PER_PI = 100;
+const SHOP_CONFIG = {
+  damage: { name: "PLASMA ACCELERATORS", baseCost: 500, maxLevel: 5, step: 500 },
+  health: { name: "NANOSHIELD ARMOR", baseCost: 400, maxLevel: 5, step: 400 },
+  speed: { name: "ION THRUSTERS", baseCost: 300, maxLevel: 5, step: 300 },
+  magnet: { name: "GRAVITY MAGNET", baseCost: 200, maxLevel: 5, step: 200 },
+  regen: { name: "BIOMETRIC REGEN", baseCost: 600, maxLevel: 5, step: 600 }
+};
+
 
 export default function App() {
     // --- CODE ĐĂNG NHẬP PI NETWORK ---
@@ -158,6 +167,68 @@ export default function App() {
     checkPiAuth();
   }, [gameState]);
   // ---------------------------------------------------------------------
+  const handlePurchaseAndUpgrade = async (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
+    const config = SHOP_CONFIG[key];
+    const currentLevel = shopUpgrades[key] || 0;
+
+    if (currentLevel >= config.maxLevel) {
+      alert("Tính năng này đã đạt cấp tối đa (MAXED)!");
+      return;
+    }
+
+    const currentCost = config.baseCost + (currentLevel * config.step);
+
+    if (metaGold >= currentCost) {
+      const remainingGold = metaGold - currentCost;
+      const updatedUpgrades = { ...shopUpgrades, [key]: currentLevel + 1 };
+      setMetaGold(remainingGold);
+      setShopUpgrades(updatedUpgrades);
+      localStorage.setItem("pioneer_meta_gold", remainingGold.toString());
+      localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(updatedUpgrades));
+      alert(`Nâng cấp thành công ${config.name}!`);
+      return;
+    }
+
+    const missingGold = currentCost - metaGold;
+    const piAmountNeeded = parseFloat((missingGold / GOLD_PER_PI).toFixed(4));
+
+    if (!(window as any).Pi) {
+      alert("Vui lòng mở game trong Pi Browser để thanh toán bằng ví Pi!");
+      return;
+    }
+
+    const confirmPayment = window.confirm(
+      `Bạn thiếu ${missingGold} Xu. Bạn có muốn thanh toán ${piAmountNeeded} Pi để hoàn tất nâng cấp không?`
+    );
+    if (!confirmPayment) return;
+
+    try {
+      await (window as any).Pi.createPayment({
+        amount: piAmountNeeded,
+        memo: `Mua xu nâng cấp ${config.name} trong game Survivor Pi`,
+        metadata: { upgrade_key: key, missing_gold: missingGold },
+      }, {
+        onReadyForServerApproval: (paymentId: string) => {
+          console.log("Đang chờ phê duyệt:", paymentId);
+        },
+        onReadyForServerCompletion: (paymentId: string, txid: string) => {
+          const finalGold = metaGold + missingGold - currentCost;
+          const updatedUpgrades = { ...shopUpgrades, [key]: currentLevel + 1 };
+          setMetaGold(finalGold);
+          setShopUpgrades(updatedUpgrades);
+          localStorage.setItem("pioneer_meta_gold", finalGold.toString());
+          localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(updatedUpgrades));
+          alert(`Thanh toán thành công ${piAmountNeeded} Pi! Đã nâng cấp lên Cấp ${currentLevel + 1}.`);
+        },
+        onCancel: () => alert("Giao dịch đã bị hủy."),
+        onError: (err: any) => alert("Giao dịch thất bại. Vui lòng kiểm tra lại số dư ví Pi!")
+      });
+    } catch (error) {
+      alert("Không thể kết nối đến Ví Pi Network!");
+    }
+  };
+  
+  
     // --- HÀM GỌI VÍ PI TESTNET THANH TOÁN VẬT PHẨM ---
   const handlePiPayment = async (amount: number, itemName: string) => {
     try {
@@ -961,19 +1032,12 @@ export default function App() {
   // ==========================================
   // PERMANENT META UPGRADE SHOP HANDLERS
   // ==========================================
-  const buyShopUpgrade = (key: keyof typeof shopUpgrades, cost: number) => {
-    if (metaGold >= cost && shopUpgrades[key] < 5) {
-      setMetaGold((prev) => {
-        const next = prev - cost;
-        localStorage.setItem("pioneer_meta_gold", next.toString());
-        return next;
-      });
+  const buyShopUpgrade = (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
+  handlePurchaseAndUpgrade(key);
+};
+  
 
-      setShopUpgrades((prev: any) => {
-        const next = { ...prev, [key]: prev[key] + 1 };
-        localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(next));
-        return next;
-      });
+      
 
       playSfx("upgrade");
     }
