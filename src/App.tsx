@@ -1029,19 +1029,13 @@ export default function App() {
     });
   };
 
-  // ==========================================
-  // PERMANENT META UPGRADE SHOP HANDLERS
-  // ==========================================
-  const buyShopUpgrade = (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
+  // ====================================================
+// // PERMANENT META UPGRADE SHOP HANDLERS
+// ====================================================
+const buyShopUpgrade = (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
   handlePurchaseAndUpgrade(key);
+  playSfx("upgrade");
 };
-  
-
-      
-
-      playSfx("upgrade");
-    }
-  };
 
   const resetSaveData = () => {
     if (confirm("Are you sure you want to reset all permanent stats, high scores, and gold?")) {
