@@ -224,29 +224,63 @@ export default function App() {
     if (!confirmPayment) return;
 
     try {
-      await (window as any).Pi.createPayment({
-        amount: piAmountNeeded,
-        memo: `Mua xu nâng cấp ${config.name} trong game Survivor Pi`,
-        metadata: { upgrade_key: key, missing_gold: missingGold },
-      }, {
-        onReadyForServerApproval: (paymentId: string) => {
-          console.log("Đang chờ phê duyệt:", paymentId);
-        },
-        onReadyForServerCompletion: (paymentId: string, txid: string) => {
-          const finalGold = metaGold + missingGold - currentCost;
+  await (window as any).Pi.createPayment({
+    amount: piAmountNeeded,
+    memo: `Mua xu nâng cấp ${config.name} trong game Survivor Pi`,
+    metadata: { upgrade_key: key, missing_gold: missingGold },
+  }, {
+    // 1. Gửi lệnh phê duyệt (Approve) lên Server của bạn
+    onReadyForServerApproval: async (paymentId: string) => {
+      try {
+        const response = await fetch('https://abc.com', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId })
+        });
+        if (!response.ok) throw new Error("Server duyệt lỗi");
+      } catch (err) {
+        console.error("Lỗi gửi phê duyệt:", err);
+      }
+    },
+
+    // 2. Gửi lệnh hoàn thành (Complete) lên Server của bạn khi người dùng ký ví xong
+    onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+      try {
+        const response = await fetch('https://abc.com', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId, txid })
+        });
+        
+        if (response.ok) {
+          // Xử lý cộng tài nguyên trong game sau khi Server xác nhận thành công
+          const remainingGold = metaGold - currentCost; // Logic tính toán của bạn
           const updatedUpgrades = { ...shopUpgrades, [key]: currentLevel + 1 };
-          setMetaGold(finalGold);
+          setMetaGold(remainingGold);
           setShopUpgrades(updatedUpgrades);
-          localStorage.setItem("pioneer_meta_gold", finalGold.toString());
+          localStorage.setItem("pioneer_meta_gold", remainingGold.toString());
           localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(updatedUpgrades));
-          alert(`Thanh toán thành công ${piAmountNeeded} Pi! Đã nâng cấp lên Cấp ${currentLevel + 1}.`);
-        },
-        onCancel: () => alert("Giao dịch đã bị hủy."),
-        onError: (err: any) => alert("Giao dịch thất bại. Vui lòng kiểm tra lại số dư ví Pi!")
-      });
-    } catch (error) {
-      alert("Không thể kết nối đến Ví Pi Network!");
+          
+          alert(`Nâng cấp thành công ${config.name}!`);
+        } else {
+          alert("Lỗi xác nhận hoàn thành giao dịch từ Server!");
+        }
+      } catch (err) {
+        console.error("Lỗi hoàn thành giao dịch:", err);
+      }
+    },
+    onCancel: (paymentId: string) => { 
+      console.log("Người dùng đã hủy thanh toán:", paymentId); 
+    },
+    onError: (error: any, payment: any) => { 
+      console.error("Lỗi cổng thanh toán Pi:", error);
+      alert("Đã xảy ra lỗi trong quá trình thanh toán Pi.");
     }
+  });
+} catch (e) {
+  console.error("Lỗi khởi tạo thanh toán:", e);
+}
+
   };
   
   
