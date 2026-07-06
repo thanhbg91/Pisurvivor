@@ -115,10 +115,104 @@ export default function App() {
     }
   };
   // ---------------------------------
+  // Hàm xử lý thanh toán mua vật phẩm trong game bằng Pi Testnet
+  const handlePiPayment = (amount: number, itemName: string) => {
+    const piWindow = window as any;
+    if (!piWindow.Pi) {
+      alert("Vui lòng mở ứng dụng này bằng Pi Browser để thanh toán!");
+      return;
+    }
+
+    piWindow.Pi.createPayment({
+      amount: amount,
+      memo: `Thanh toan mua: ${itemName}`,
+      metadata: { item_name: itemName },
+    }, {
+      onReadyForServerApproval: function(paymentId: string) {
+        console.log("Đang gửi yêu cầu phê duyệt đơn hàng: ", paymentId);
+        
+        fetch(`https://herokuapp.com{paymentId}/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Key ĐIỀN_MÃ_SERVER_API_KEY_CỦA_BẠN_VÀO_ĐÂY',
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(res => res.json())
+        .then(data => console.log("Pi Server duyệt thành công đơn hàng:", data))
+        .catch(err => console.error("Lỗi duyệt đơn:", err));
+      },
+
+      onReadyForServerCompletion: function(paymentId: string, txid: string) {
+        console.log("Giao dịch thành công trên Blockchain! TxID: ", txid);
+
+        fetch(`https://herokuapp.com{paymentId}/complete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Key ĐIỀN_MÃ_SERVER_API_KEY_CỦA_BẠN_VÀO_ĐÂY',
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(res => res.json())
+        .then(data => {
+          alert(`🎉 Thanh toán thành công! Bạn đã mua: ${itemName}`);
+          // Tự động cộng 500 vàng vào thuộc tính gold trong game của bạn
+          setGameStats((prev: any) => ({ ...prev, gold: prev.gold + 500 }));
+        })
+        .catch(err => console.error("Lỗi hoàn tất giao dịch:", err));
+      },
+
+      onCancel: function(paymentId: string) {
+        alert("Giao dịch đã bị người dùng hủy bỏ.");
+      },
+
+      onError: function(error: any, paymentId: string) {
+        alert("Hệ thống thanh toán Ví Pi gặp lỗi. Hãy thử lại!");
+        console.error("Chi tiết lỗi Pi SDK:", error);
+      }
+    });
+  };
+  
+
+        fetch(`https://herokuapp.com{paymentId}/complete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Key ĐIỀN_SERVER_API_KEY_TESTNET_CỦA_BẠN_Ở_ĐÂY', // Thay API Key từ develop.pi của bạn vào
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(res => res.json())
+        .then(data => {
+          alert(`🎉 Thanh toán thành công! Bạn đã mua: ${itemName}`);
+          
+          // --- LOGIC CỘNG VÀNG KHI MUA THÀNH CÔNG ---
+          setGameStats(prev => ({ ...prev, gold: prev.gold + 500 }));
+        })
+        .catch(err => console.error("Lỗi hoàn tất giao dịch:", err));
+      },
+
+      onCancel: function(paymentId: string) {
+        alert("Giao dịch đã bị người dùng hủy bỏ.");
+      },
+
+      onError: function(error: any, paymentId: string) {
+        alert("Hệ thống thanh toán Ví Pi gặp lỗi. Hãy thử lại!");
+        console.error("Chi tiết lỗi Pi SDK:", error);
+      }
+    });
+  };
   
   // ==========================================
   // REACT STATE (UI, Overlays, Persistent Upgrades)
   // ==========================================
+    // Khởi tạo Pi SDK khi người chơi vừa mở Game
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Pi) {
+      (window as any).Pi.init({ version: "2.0", sandbox: true });
+      console.log("Pi SDK Testnet đã sẵn sàng!");
+    }
+  }, []);
+  
   const [gameState, setGameState] = useState<"START" | "PLAYING" | "GAMEOVER">("START");
   const [isLevelUp, setIsLevelUp] = useState(false);
   const [levelUpOptions, setLevelUpOptions] = useState<UpgradeOption[]>([]);
