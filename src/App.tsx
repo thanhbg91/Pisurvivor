@@ -1003,3 +1003,497 @@ export default function App() {
       engine.enemies = [];
       engine.projectiles = [];
       
+     // Create a gorgeous massive star particle explosion
+      for (let i = 0; i < 60; i++) {
+        const a = (i / 60) * Math.PI * 2;
+        const spd = 5 + Math.random() * 8;
+        engine.particles.push({
+          x: engine.player.x,
+          y: engine.player.y,
+          vx: Math.cos(a) * spd,
+          vy: Math.sin(a) * spd,
+          color: "#22c55e",
+          size: 4 + Math.random() * 3,
+          alpha: 1,
+          decay: 0.02
+        });
+      }
+
+      playSfx("revive");
+      setGameState("PLAYING");
+      engine.isPaused = false;
+      engine.lastFrameTime = performance.now();
+    });
+  };
+
+  const handleDoubleGoldAd = () => {
+    // showDoubleGoldAd() console stub and full game interaction
+    console.log("showDoubleGoldAd(): Video ad playback success. Doubling extracted gold reserves!");
+    triggerAdFlow("DOUBLE_GOLD", "Doubling Gold Loot...", () => {
+      setDoubleGoldApplied(true);
+      setFinalStats((prev) => {
+        const addedGold = prev.gold;
+        const doubledGold = prev.gold * 2;
+        // Credit the double gold permanently to currency
+        setMetaGold((g) => {
+          const next = g + addedGold;
+          localStorage.setItem("pioneer_meta_gold", next.toString());
+          return next;
+        });
+        return {
+          ...prev,
+          gold: doubledGold,
+          unlockedGold: prev.unlockedGold + addedGold
+        };
+      });
+      playSfx("levelup");
+    });
+  };
+
+  // ====================================================
+// // PERMANENT META UPGRADE SHOP HANDLERS
+// ====================================================
+const buyShopUpgrade = (key: any) => {
+  const standardizedKey = String(key).toLowerCase() as "damage" | "health" | "speed" | "magnet" | "regen";
+  handlePurchaseAndUpgrade(standardizedKey);
+  playSfx("upgrade");
+};
+
+
+  const resetSaveData = () => {
+    if (confirm("Are you sure you want to reset all permanent stats, high scores, and gold?")) {
+      localStorage.clear();
+      setMetaGold(0);
+      setShopUpgrades({ damage: 0, health: 0, speed: 0, magnet: 0, regen: 0 });
+      setHighScores([]);
+      playSfx("hurt");
+    }
+  };
+
+  // ==========================================
+  // MAIN CORE GAME loop (requestAnimationFrame)
+  // ==========================================
+  useEffect(() => {
+    if (gameState !== "PLAYING") return;
+
+    let animId: number;
+
+    const gameLoop = (time: number) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      const engine = engineRef.current;
+
+      if (!canvas || !ctx) {
+        animId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      // Delta Time calculation
+      let dt = (time - engine.lastFrameTime) / 16.666; // Normalized around 60fps
+      if (dt > 4) dt = 4; // Caps freeze gaps to prevent skips
+      engine.lastFrameTime = time;
+
+      if (engine.isPaused) {
+        animId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      // 1. UPDATE TIMER & STATS
+      engine.gameTime += (16.666 * dt) / 1000;
+      const minutes = Math.floor(engine.gameTime / 60);
+      const seconds = Math.floor(engine.gameTime % 60);
+      const timeStr = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+
+      // 2. PASSIVE PLAYER STATS (REGEN)
+      if (engine.player.regenRate > 0 && engine.player.hp < engine.player.maxHp) {
+        const addedHp = (engine.player.regenRate * 16.666 * dt) / 1000;
+        engine.player.hp = Math.min(engine.player.hp + addedHp, engine.player.maxHp);
+      }
+
+      // 3. PLAYER MOVEMENT INPUTS
+      let dx = 0;
+      let dy = 0;
+
+      // Handle keyboard move velocity
+      if (engine.keys.w || engine.keys.ArrowUp) dy -= 1;
+      if (engine.keys.s || engine.keys.ArrowDown) dy += 1;
+      if (engine.keys.a || engine.keys.ArrowLeft) dx -= 1;
+      if (engine.keys.d || engine.keys.ArrowRight) dx += 1;
+
+      // Handle virtual touch joystick velocity
+      if (engine.joystick.active) {
+        const jdx = engine.joystick.curX - engine.joystick.startX;
+        const jdy = engine.joystick.curY - engine.joystick.startY;
+        const jdist = Math.sqrt(jdx * jdx + jdy * jdy);
+        if (jdist > 0) {
+          const power = Math.min(jdist, 60) / 60;
+          dx = (jdx / jdist) * power;
+          dy = (jdy / jdist) * power;
+        }
+      }
+
+      // Normalise direction
+      const moveDist = Math.sqrt(dx * dx + dy * dy);
+      if (moveDist > 0) {
+        engine.player.x += (dx / (moveDist > 1 ? moveDist : 1)) * engine.player.speed * dt;
+        engine.player.y += (dy / (moveDist > 1 ? moveDist : 1)) * engine.player.speed * dt;
+
+        // Emit subtle jetpack exhaust particles
+        if (Math.random() < 0.3 * dt) {
+          engine.particles.push({
+            x: engine.player.x - (dx / moveDist) * 10,
+            y: engine.player.y - (dy / moveDist) * 10,
+            vx: -(dx / moveDist) * 2 + (Math.random() - 0.5),
+            vy: -(dy / moveDist) * 2 + (Math.random() - 0.5),
+            color: Math.random() > 0.4 ? "#f97316" : "#ef4444",
+            size: 2 + Math.random() * 2,
+            alpha: 1,
+            decay: 0.04
+          });
+        }
+      }
+
+      // Update passive Shield orbit angle
+      engine.shieldAngle += 0.05 * dt;
+
+      // 4. WEAPONS UPDATE
+      engine.weapons.forEach((wpn) => {
+        if (wpn.id === "nanoshield") return; // Render-only or calculated on ticks
+        wpn.timer += dt;
+        if (wpn.timer >= wpn.maxTimer) {
+          wpn.timer = 0;
+          fireWeapon(wpn, engine.player, engine.enemies, engine.projectiles);
+        }
+      });
+
+      // 5. SPAWN SWARMS GRADUALLY IN CIRCLES
+      engine.spawnTimer += dt;
+      let spawnRate = Math.max(25, 80 - Math.floor(engine.gameTime * 0.4)); // gets faster and harder
+      if (engine.spawnTimer >= spawnRate) {
+        engine.spawnTimer = 0;
+
+        // Decide type based on elapsed seconds
+        let enemyType: Enemy["type"] = "drone";
+        let hp = 15;
+        let speed = 1.1;
+        let size = 9;
+        let color = "#ef4444"; // red drone
+        let pts = 1;
+
+        const roll = Math.random();
+        if (engine.gameTime > 120 && roll < 0.15) {
+          enemyType = "goliath";
+          hp = 110;
+          speed = 0.5;
+          size = 18;
+          color = "#3b82f6"; // blue giant tank
+          pts = 5;
+        } else if (engine.gameTime > 50 && roll < 0.25) {
+          enemyType = "charger";
+          hp = 8;
+          speed = 2.1;
+          size = 7;
+          color = "#22c55e"; // bright green fast
+          pts = 2;
+        }
+
+        // Periodic minutes bosses
+        if (Math.floor(engine.gameTime) > 0 && Math.floor(engine.gameTime) % 60 === 0 && !engine.bossSpawned) {
+          enemyType = "boss";
+          hp = 450 + Math.floor(engine.gameTime) * 3;
+          speed = 0.7;
+          size = 28;
+          color = "#d946ef"; // purple mega boss
+          pts = 20;
+          engine.bossSpawned = true;
+          engine.damageTexts.push({
+            x: engine.player.x,
+            y: engine.player.y - 30,
+            text: "WARNING: ELITE CARRIER DETECTED!",
+            color: "#f43f5e",
+            alpha: 1,
+            vy: -0.5
+          });
+        }
+
+        if (Math.floor(engine.gameTime) % 60 !== 0) {
+          engine.bossSpawned = false; // reset spawn toggle
+        }
+
+        // Spawn 350-450px out in random direction
+        const spawnAngle = Math.random() * Math.PI * 2;
+        const dist = 380 + Math.random() * 50;
+        const enemyX = engine.player.x + Math.cos(spawnAngle) * dist;
+        const enemyY = engine.player.y + Math.sin(spawnAngle) * dist;
+
+        engine.enemies.push({
+          id: Math.random().toString(),
+          x: enemyX,
+          y: enemyY,
+          hp,
+          maxHp: hp,
+          speed,
+          size,
+          color,
+          type: enemyType,
+          points: pts,
+        });
+      }
+
+      // 6. UPDATE ENEMIES (MOVE TOWARDS PLAYER)
+      engine.enemies.forEach((enemy) => {
+        const edx = engine.player.x - enemy.x;
+        const edy = engine.player.y - enemy.y;
+        const edist = Math.sqrt(edx * edx + edy * edy);
+        if (edist > 0) {
+          enemy.x += (edx / edist) * enemy.speed * dt;
+          enemy.y += (edy / edist) * enemy.speed * dt;
+        }
+
+        // Player Collision Damage Check
+        if (edist < engine.player.size + enemy.size) {
+          const dmg = (enemy.type === "boss" ? 0.8 : enemy.type === "goliath" ? 0.4 : 0.15) * dt;
+          // Apply armor reduction from meta shop
+          const armorReduction = shopUpgrades.regen * 0.05; // Use regen levels as minor armor reduction too
+          const finalHit = Math.max(0.05, dmg * (1 - armorReduction));
+          engine.player.hp -= finalHit;
+
+          if (Math.random() < 0.05) {
+            playSfx("hurt");
+            engine.damageTexts.push({
+              x: engine.player.x + (Math.random() - 0.5) * 15,
+              y: engine.player.y - 12,
+              text: `-${Math.round(finalHit * 10) / 10}`,
+              color: "#f87171",
+              alpha: 1,
+              vy: -0.8
+            });
+          }
+        }
+      });
+
+      // 7. ORBITING SHIELD WEAPON PASSIVE DAMAGE COLLISION
+      const shieldWpn = engine.weapons.find((w) => w.id === "nanoshield");
+      if (shieldWpn) {
+        const orbCount = shieldWpn.level >= 5 ? 4 : shieldWpn.level >= 4 ? 3 : shieldWpn.level >= 2 ? 2 : 1;
+        const orbitRadius = shieldWpn.level >= 4 ? 75 : 60;
+        const shieldDmg = (8 + shieldWpn.level * 4) * engine.player.damageMultiplier;
+
+        for (let i = 0; i < orbCount; i++) {
+          const angle = engine.shieldAngle + (i / orbCount) * Math.PI * 2;
+          const sx = engine.player.x + Math.cos(angle) * orbitRadius;
+          const sy = engine.player.y + Math.sin(angle) * orbitRadius;
+
+          engine.enemies.forEach((e) => {
+            const sedx = e.x - sx;
+            const sedy = e.y - sy;
+            const sedist = Math.sqrt(sedx * sedx + sedy * sedy);
+            if (sedist < e.size + 8) {
+              e.hp -= shieldDmg * 0.1 * dt; // deals ticking damage over frame delta
+              if (Math.random() < 0.06 * dt) {
+                playSfx("hit");
+                engine.damageTexts.push({
+                  x: e.x,
+                  y: e.y - 10,
+                  text: `${Math.round(shieldDmg)}`,
+                  color: "#10b981",
+                  alpha: 1,
+                  vy: -1.2
+                });
+                // Small green dust particles on slice hit
+                engine.particles.push({
+                  x: e.x,
+                  y: e.y,
+                  vx: (Math.random() - 0.5) * 4,
+                  vy: (Math.random() - 0.5) * 4,
+                  color: "#10b981",
+                  size: 2,
+                  alpha: 1,
+                  decay: 0.06
+                });
+              }
+            }
+          });
+        }
+      }
+
+      // 8. UPDATE PROJECTILES & BULLET COLLISION
+      for (let i = engine.projectiles.length - 1; i >= 0; i--) {
+        const p = engine.projectiles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+
+        // Check distance limit off screen
+        const pdx = p.x - engine.player.x;
+        const pdy = p.y - engine.player.y;
+        if (Math.sqrt(pdx * pdx + pdy * pdy) > 500) {
+          engine.projectiles.splice(i, 1);
+          continue;
+        }
+
+        // Enemy Hits
+        for (let j = engine.enemies.length - 1; j >= 0; j--) {
+          const e = engine.enemies[j];
+          const cdx = e.x - p.x;
+          const cdy = e.y - p.y;
+          const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+
+          if (cdist < e.size + p.size) {
+            e.hp -= p.damage;
+            playSfx("hit");
+
+            engine.damageTexts.push({
+              x: e.x,
+              y: e.y - 10,
+              text: `${Math.round(p.damage)}`,
+              color: "#38bdf8",
+              alpha: 1,
+              vy: -1.3
+            });
+
+            // Spark splash
+            for (let s = 0; s < 4; s++) {
+              engine.particles.push({
+                x: p.x,
+                y: p.y,
+                vx: (Math.random() - 0.5) * 4 + p.vx * 0.1,
+                vy: (Math.random() - 0.5) * 4 + p.vy * 0.1,
+                color: p.color,
+                size: 2,
+                alpha: 1,
+                decay: 0.07
+              });
+            }
+
+            p.pierce -= 1;
+            if (p.pierce <= 0) {
+              engine.projectiles.splice(i, 1);
+              break;
+            }
+          }
+        }
+      }
+
+      // 9. CLEAN DEFEATED ENEMIES & DROP XP/GOLD
+      for (let i = engine.enemies.length - 1; i >= 0; i--) {
+        const e = engine.enemies[i];
+        if (e.hp <= 0) {
+          playSfx("kill");
+          engine.player.kills += 1;
+
+          // Splatter particles
+          for (let sp = 0; sp < 8; sp++) {
+            engine.particles.push({
+              x: e.x,
+              y: e.y,
+              vx: (Math.random() - 0.5) * 5,
+              vy: (Math.random() - 0.5) * 5,
+              color: e.color,
+              size: 2 + Math.random() * 3,
+              alpha: 1,
+              decay: 0.05
+            });
+          }
+
+          // Randomize dropping Gold Coins or XP Orbs
+          const isBoss = e.type === "boss";
+          const isGold = isBoss ? true : Math.random() < 0.18; // 18% gold chance from normal targets
+
+          engine.items.push({
+            x: e.x,
+            y: e.y,
+            amount: isBoss ? 15 : e.points,
+            size: isGold ? 4 : 3,
+            color: isGold ? "#fbbf24" : isBoss ? "#d946ef" : "#10b981", // gold, magenta for boss, green for standard xp
+            isGold,
+            pulling: false,
+          });
+
+          engine.enemies.splice(i, 1);
+        }
+      }
+
+      // 10. MAGNETIC PICKUPS MATRIX
+      for (let i = engine.items.length - 1; i >= 0; i--) {
+        const item = engine.items[i];
+        const idx = engine.player.x - item.x;
+        const idy = engine.player.y - item.y;
+        const idist = Math.sqrt(idx * idx + idy * idy);
+
+        if (idist < engine.player.magnetRange) {
+          item.pulling = true;
+        }
+
+        if (item.pulling) {
+          // Speed up towards player
+          item.x += (idx / idist) * 5 * dt;
+          item.y += (idy / idist) * 5 * dt;
+        }
+
+        // Actual Collection
+        if (idist < engine.player.size + item.size + 4) {
+          playSfx("xp");
+          if (item.isGold) {
+            engine.player.gold += item.amount;
+            engine.damageTexts.push({
+              x: item.x,
+              y: item.y,
+              text: `+${item.amount}¢`,
+              color: "#fbbf24",
+              alpha: 1,
+              vy: -1.2
+            });
+          } else {
+            engine.player.xp += item.amount;
+          }
+
+          // Check level up!
+          if (engine.player.xp >= engine.player.xpNeeded) {
+            engine.player.xp -= engine.player.xpNeeded;
+            engine.player.level += 1;
+            engine.player.xpNeeded = Math.floor(50 + engine.player.level * 40);
+            triggerLevelUp();
+          }
+
+          engine.items.splice(i, 1);
+        }
+      }
+
+      // 11. PARTICLES & DAMAGE TEXTS ANIMATION UPDATES
+      for (let i = engine.particles.length - 1; i >= 0; i--) {
+        const pt = engine.particles[i];
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+        pt.alpha -= pt.decay * dt;
+        if (pt.alpha <= 0) {
+          engine.particles.splice(i, 1);
+        }
+      }
+
+      for (let i = engine.damageTexts.length - 1; i >= 0; i--) {
+        const txt = engine.damageTexts[i];
+        txt.y += txt.vy * dt;
+        txt.alpha -= 0.03 * dt;
+        if (txt.alpha <= 0) {
+          engine.damageTexts.splice(i, 1);
+        }
+      }
+
+      // 12. TRIGGER DEFEAT/GAME OVER
+      if (engine.player.hp <= 0) {
+        setGameState("GAMEOVER");
+        playSfx("gameover");
+
+        const earnedGold = engine.player.gold;
+        // Credit meta gold permanently
+        setMetaGold((g) => {
+          const next = g + earnedGold;
+          localStorage.setItem("pioneer_meta_gold", next.toString());
+          return next;
+        });
+
+        // Save High Scores
+        const finalTime = timeStr;
+        const finalKills = engine.player.kills;
+        const finalLevel = engine.player.level;
+          
