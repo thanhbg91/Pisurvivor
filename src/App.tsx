@@ -510,3 +510,496 @@ export default function App() {
             jOsc.start(now + idx * 0.1);
             jOsc.stop(now + idx * 0.1 + 0.2);
           });
+          break;
+        case "gameover":
+          // Melodramatic minor chord fall
+          const baseNotes = [293.66, 349.23, 440]; // D minor
+          baseNotes.forEach((f, idx) => {
+            const gOsc = ctx.createOscillator();
+            const gGain = ctx.createGain();
+            gOsc.connect(gGain);
+            gGain.connect(ctx.destination);
+            gOsc.frequency.setValueAtTime(f, now);
+            gOsc.frequency.linearRampToValueAtTime(f * 0.5, now + 0.6);
+            gGain.gain.setValueAtTime(0.12, now);
+            gGain.gain.exponentialRampToValueAtTime(0.005, now + 0.6);
+            gOsc.start(now);
+            gOsc.stop(now + 0.6);
+          });
+          break;
+      }
+    } catch (e) {
+      console.warn("Audio Context Error", e);
+    }
+  };
+
+  // Toggle Mute Helper
+  const toggleMute = () => {
+    setIsMuted((prev: boolean) => {
+      const next = !prev;
+      localStorage.setItem("pioneer_muted", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // ==========================================
+  // INITIAL GAME SETUP & RESIZING
+  // ==========================================
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (canvas && container) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+      }
+    };
+
+    if (gameState === "PLAYING") {
+      handleResize();
+      window.addEventListener("resize", handleResize);
+    }
+    return () => window.removeEventListener("resize", handleResize);
+  }, [gameState]);
+
+  // Handle Keyboard Input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"].includes(k) || ["arrowup", "arrowleft", "arrowdown", "arrowright"].includes(e.key.toLowerCase())) {
+        const keyMap = engineRef.current.keys as any;
+        if (k in keyMap) keyMap[k] = true;
+        if (e.key in keyMap) keyMap[e.key] = true;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      const keyMap = engineRef.current.keys as any;
+      if (k in keyMap) keyMap[k] = false;
+      if (e.key in keyMap) keyMap[e.key] = false;
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  // ==========================================
+  // GAME START / INITIALIZATION FUNCTION
+  // ==========================================
+  const startNewGame = () => {
+    initAudio();
+    setHasRevivedThisRun(false);
+    setDoubleGoldApplied(false);
+
+    // Apply permanent stats from shop
+    const baseMaxHp = 100 + shopUpgrades.health * 15;
+    const baseSpeed = 1.8 + shopUpgrades.speed * 0.18;
+    const baseDamage = 1.0 + shopUpgrades.damage * 0.15;
+    const baseMagnet = 100 + shopUpgrades.magnet * 25;
+    const baseRegen = shopUpgrades.regen * 0.35;
+
+    // Reset Engine Ref
+    engineRef.current = {
+      player: {
+        x: 0,
+        y: 0,
+        hp: baseMaxHp,
+        maxHp: baseMaxHp,
+        level: 1,
+        xp: 0,
+        xpNeeded: 50,
+        gold: 0,
+        kills: 0,
+        speed: baseSpeed,
+        magnetRange: baseMagnet,
+        damageMultiplier: baseDamage,
+        regenRate: baseRegen,
+        size: 14,
+      },
+      weapons: [
+        { id: "plasma_gun", name: "Plasma Cannon", level: 1, timer: 0, maxTimer: 60 }
+      ],
+      enemies: [],
+      projectiles: [],
+      items: [],
+      particles: [],
+      damageTexts: [],
+      keys: {
+        w: false, a: false, s: false, d: false,
+        ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false,
+      },
+      joystick: {
+        active: false,
+        startX: 0,
+        startY: 0,
+        curX: 0,
+        curY: 0,
+      },
+      gameTime: 0,
+      spawnTimer: 0,
+      isPaused: false,
+      bossSpawned: false,
+      shieldAngle: 0,
+      lastFrameTime: performance.now(),
+    };
+
+    setGameState("PLAYING");
+    setIsLevelUp(false);
+    setGameStats({
+      time: "00:00",
+      kills: 0,
+      gold: 0,
+      level: 1,
+      xpPercent: 0,
+      hpPercent: 100,
+    });
+  };
+
+  // ==========================================
+  // WEAPON FIRE BEHAVIOR HANDLER
+  // ==========================================
+  const fireWeapon = (wpn: Weapon, player: any, enemies: Enemy[], projectiles: Projectile[]) => {
+    // Targets the nearest enemy
+    if (enemies.length === 0) return;
+
+    let nearestEnemy: Enemy | null = null;
+    let nearestDist = Infinity;
+
+    enemies.forEach((enemy) => {
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestEnemy = enemy;
+      }
+    });
+
+    if (!nearestEnemy) return;
+
+    const target: Enemy = nearestEnemy;
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const vx = (dx / dist) * 6; // bullet speed
+    const vy = (dy / dist) * 6;
+
+    const baseDmg = 12 * player.damageMultiplier;
+
+    if (wpn.id === "plasma_gun") {
+      playSfx("shoot");
+      if (wpn.level === 1) {
+        projectiles.push({ x: player.x, y: player.y, vx, vy, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+      } else if (wpn.level === 2) {
+        // Double shots slightly angled
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 0.98 - vy * 0.05, vy: vy * 0.98 + vx * 0.05, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 0.98 + vy * 0.05, vy: vy * 0.98 - vx * 0.05, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+      } else if (wpn.level === 3) {
+        // High Damage Heavy shots
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 1.2, vy: vy * 1.2, damage: baseDmg * 1.5, size: 6, color: "#facc15", pierce: 1 });
+      } else if (wpn.level === 4) {
+        // 3 spread shot
+        projectiles.push({ x: player.x, y: player.y, vx, vy, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 0.92 - vy * 0.15, vy: vy * 0.92 + vx * 0.15, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 0.92 + vy * 0.15, vy: vy * 0.92 - vx * 0.15, damage: baseDmg, size: 4, color: "#38bdf8", pierce: 1 });
+      } else {
+        // Max Level Hyper Plasma (Pierces)
+        projectiles.push({ x: player.x, y: player.y, vx: vx * 1.3, vy: vy * 1.3, damage: baseDmg * 1.8, size: 7, color: "#a855f7", pierce: 3 });
+      }
+    }
+
+    if (wpn.id === "lightning_rod") {
+      // Periodic Lightning targets random enemies
+      const strikeCount = wpn.level >= 4 ? 4 : wpn.level >= 2 ? 2 : 1;
+      const damage = (30 + wpn.level * 15) * player.damageMultiplier;
+      const splash = wpn.level >= 3;
+
+      for (let i = 0; i < strikeCount; i++) {
+        if (enemies.length === 0) break;
+        const index = Math.floor(Math.random() * enemies.length);
+        const tgt = enemies[index];
+        playSfx("hit");
+
+        // Flash and strike on canvas coordinates inside the loop
+        // Deal damage immediately
+        tgt.hp -= damage;
+        engineRef.current.damageTexts.push({
+          x: tgt.x,
+          y: tgt.y - 10,
+          text: `${Math.round(damage)}⚡`,
+          color: "#e0f2fe",
+          alpha: 1,
+          vy: -1.5
+        });
+
+        // Add splash damage
+        if (splash) {
+          enemies.forEach((other) => {
+            if (other.id !== tgt.id) {
+              const dxo = other.x - tgt.x;
+              const dyo = other.y - tgt.y;
+              const disto = Math.sqrt(dxo * dxo + dyo * dyo);
+              if (disto < 75) {
+                const splashDmg = damage * 0.5;
+                other.hp -= splashDmg;
+                engineRef.current.damageTexts.push({
+                  x: other.x,
+                  y: other.y - 8,
+                  text: `${Math.round(splashDmg)}`,
+                  color: "#93c5fd",
+                  alpha: 1,
+                  vy: -1.2
+                });
+              }
+            }
+          });
+        }
+
+        // Spawn strike sparks
+        for (let s = 0; s < 12; s++) {
+          engineRef.current.particles.push({
+            x: tgt.x,
+            y: tgt.y,
+            vx: (Math.random() - 0.5) * 5,
+            vy: (Math.random() - 0.5) * 5,
+            color: "#60a5fa",
+            size: 2 + Math.random() * 2,
+            alpha: 1,
+            decay: 0.05 + Math.random() * 0.04
+          });
+        }
+      }
+    }
+
+    if (wpn.id === "quantum_wave") {
+      // Expand shockwave pulse from center
+      const radius = 100 + wpn.level * 25;
+      const dmg = (15 + wpn.level * 8) * player.damageMultiplier;
+      const knockbackForce = wpn.level >= 3 ? 6 : 4;
+      playSfx("shoot");
+
+      enemies.forEach((e) => {
+        const dx = e.x - player.x;
+        const dy = e.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= radius) {
+          e.hp -= dmg;
+          // Apply push back
+          const angle = Math.atan2(dy, dx);
+          e.x += Math.cos(angle) * knockbackForce;
+          e.y += Math.sin(angle) * knockbackForce;
+
+          engineRef.current.damageTexts.push({
+            x: e.x,
+            y: e.y - 12,
+            text: `${Math.round(dmg)}`,
+            color: "#22d3ee",
+            alpha: 1,
+            vy: -1.0
+          });
+        }
+      });
+
+      // Spawn concentric pulse visual rings
+      for (let p = 0; p < 3; p++) {
+        setTimeout(() => {
+          if (gameState !== "PLAYING" || engineRef.current.isPaused) return;
+          // Spawn cosmetic expanding wave particle ring in frame
+          for (let r = 0; r < 24; r++) {
+            const angle = (r / 24) * Math.PI * 2;
+            engineRef.current.particles.push({
+              x: player.x,
+              y: player.y,
+              vx: Math.cos(angle) * (radius / 15),
+              vy: Math.sin(angle) * (radius / 15),
+              color: "rgba(34, 211, 238, 0.4)",
+              size: 3,
+              alpha: 0.8,
+              decay: 0.04
+            });
+          }
+        }, p * 120);
+      }
+    }
+  };
+
+  // ==========================================
+  // LEVEL UP UPGRADE RANDOMIZER
+  // ==========================================
+  const triggerLevelUp = () => {
+    engineRef.current.isPaused = true;
+    playSfx("levelup");
+
+    // Form upgrade choices
+    const options: UpgradeOption[] = [];
+    const playerWeapons = engineRef.current.weapons;
+
+    // Helper to get active weapon level
+    const getLevel = (id: string) => playerWeapons.find((w) => w.id === id)?.level || 0;
+
+    // Upgrades Pool
+    const pool = [
+      { id: "plasma_gun", name: "Plasma Cannon", desc: "Autofires high-velocity plasma bolts targeting nearest foes.", icon: <Flame className="w-6 h-6 text-sky-400" />, type: "weapon" as const },
+      { id: "nanoshield", name: "Nano-Orbit Shield", desc: "Energy orbs rotate around you, tearing down contacting threats.", icon: <Shield className="w-6 h-6 text-emerald-400" />, type: "weapon" as const },
+      { id: "quantum_wave", name: "Quantum Nova", desc: "Fires expanding gravity pulses to damage and knock back swarms.", icon: <Zap className="w-6 h-6 text-cyan-400" />, type: "weapon" as const },
+      { id: "lightning_rod", name: "Tesla Strike", desc: "Calls high-voltage electric discharges striking random invaders.", icon: <Sparkles className="w-6 h-6 text-violet-400" />, type: "weapon" as const },
+      { id: "stat_dmg", name: "Damage Accelerator", desc: "Supercharges weapon reactors, increasing damage output by +15%.", icon: <Zap className="w-6 h-6 text-amber-400" />, type: "stat" as const },
+      { id: "stat_speed", name: "Thruster Overclock", desc: "Improves structural propulsion systems, boosting speed by +12%.", icon: <Activity className="w-6 h-6 text-rose-400" />, type: "stat" as const },
+      { id: "stat_magnet", name: "Quantum Harvester", desc: "Overclocks electromagnetic pickup matrix for items by +25%.", icon: <Sparkles className="w-6 h-6 text-fuchsia-400" />, type: "stat" as const },
+      { id: "stat_heal", name: "Micro-Repair Bots", desc: "Injects nanite streams that passively regenerate +0.5 HP/sec.", icon: <Heart className="w-6 h-6 text-green-400" />, type: "stat" as const },
+    ];
+
+    // Pick 3 random, relevant upgrades
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    const selected = shuffled.filter((item) => {
+      if (item.type === "weapon") {
+        const lvl = getLevel(item.id);
+        return lvl < 5; // Allow unlocking or leveling up up to 5
+      }
+      return true;
+    }).slice(0, 3);
+
+    const formatted: UpgradeOption[] = selected.map((item) => {
+      const curLvl = getLevel(item.id);
+      return {
+        id: item.id,
+        name: curLvl > 0 ? `${item.name} (Lv. ${curLvl + 1})` : `Unlock ${item.name}`,
+        desc: item.desc,
+        icon: item.icon,
+        level: curLvl,
+        type: item.type,
+      };
+    });
+
+    setLevelUpOptions(formatted);
+    setIsLevelUp(true);
+  };
+
+  const applyUpgrade = (opt: UpgradeOption) => {
+    const engine = engineRef.current;
+    playSfx("upgrade");
+
+    if (opt.type === "weapon") {
+      const existing = engine.weapons.find((w) => w.id === opt.id);
+      if (existing) {
+        existing.level += 1;
+      } else {
+        // Unlock new weapon
+        let maxTimer = 60;
+        if (opt.id === "lightning_rod") maxTimer = 150;
+        if (opt.id === "quantum_wave") maxTimer = 220;
+        if (opt.id === "nanoshield") maxTimer = 999999; // passive updater
+
+        engine.weapons.push({ id: opt.id, name: opt.name, level: 1, timer: 0, maxTimer });
+      }
+    } else {
+      // Stat Upgrades
+      if (opt.id === "stat_dmg") engine.player.damageMultiplier += 0.15;
+      if (opt.id === "stat_speed") engine.player.speed += 0.18;
+      if (opt.id === "stat_magnet") engine.player.magnetRange += 25;
+      if (opt.id === "stat_heal") {
+        engine.player.regenRate += 0.5;
+        engine.player.hp = Math.min(engine.player.hp + 20, engine.player.maxHp);
+      }
+    }
+
+    // Resume loop
+    engine.isPaused = false;
+    setIsLevelUp(false);
+  };
+
+  // ==========================================
+  // AD MONETIZATION INTEGRATIONS (MOCK)
+  // ==========================================
+  const triggerAdFlow = (
+    type: "REROLL" | "REVIVE" | "DOUBLE_GOLD",
+    title: string,
+    onReward: () => void
+  ) => {
+    playSfx("ad");
+    engineRef.current.isPaused = true;
+
+    setAdState({
+      visible: true,
+      type,
+      timer: 1.5, // 1.5-second high-energy simulated ad
+      title,
+    });
+
+    const interval = setInterval(() => {
+      setAdState((prev) => {
+        if (prev.timer <= 0.1) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setAdState({ visible: false, type: null, timer: 0, title: "" });
+            onReward();
+          }, 300);
+          return { ...prev, timer: 0 };
+        }
+        return { ...prev, timer: prev.timer - 0.1 };
+      });
+    }, 100);
+  };
+
+  const handleRerollAd = () => {
+    // showRerollAd() console stub and full game interaction
+    console.log("showRerollAd(): Dispatching interactive video ad to reshuffle game cards");
+    triggerAdFlow("REROLL", "Reshuffling Skill Cards...", () => {
+      const pool = [
+        { id: "plasma_gun", name: "Plasma Cannon", desc: "Autofires high-velocity plasma bolts targeting nearest foes.", icon: <Flame className="w-6 h-6 text-sky-400" />, type: "weapon" as const },
+        { id: "nanoshield", name: "Nano-Orbit Shield", desc: "Energy orbs rotate around you, tearing down contacting threats.", icon: <Shield className="w-6 h-6 text-emerald-400" />, type: "weapon" as const },
+        { id: "quantum_wave", name: "Quantum Nova", desc: "Fires expanding gravity pulses to damage and knock back swarms.", icon: <Zap className="w-6 h-6 text-cyan-400" />, type: "weapon" as const },
+        { id: "lightning_rod", name: "Tesla Strike", desc: "Calls high-voltage electric discharges striking random invaders.", icon: <Sparkles className="w-6 h-6 text-violet-400" />, type: "weapon" as const },
+        { id: "stat_dmg", name: "Damage Accelerator", desc: "Supercharges weapon reactors, increasing damage output by +15%.", icon: <Zap className="w-6 h-6 text-amber-400" />, type: "stat" as const },
+        { id: "stat_speed", name: "Thruster Overclock", desc: "Improves structural propulsion systems, boosting speed by +12%.", icon: <Activity className="w-6 h-6 text-rose-400" />, type: "stat" as const },
+        { id: "stat_magnet", name: "Quantum Harvester", desc: "Overclocks electromagnetic pickup matrix for items by +25%.", icon: <Sparkles className="w-6 h-6 text-fuchsia-400" />, type: "stat" as const },
+        { id: "stat_heal", name: "Micro-Repair Bots", desc: "Injects nanite streams that passively regenerate +0.5 HP/sec.", icon: <Heart className="w-6 h-6 text-green-400" />, type: "stat" as const },
+      ];
+
+      const playerWeapons = engineRef.current.weapons;
+      const getLvl = (id: string) => playerWeapons.find((w) => w.id === id)?.level || 0;
+
+      // Pick 3 random, unique, relevant upgrades
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      const selected = shuffled.filter((item) => {
+        if (item.type === "weapon") {
+          const lvl = getLvl(item.id);
+          return lvl < 5; // Allow unlocking or leveling up up to 5
+        }
+        return true;
+      }).slice(0, 3);
+
+      const randomUpgrades: UpgradeOption[] = selected.map((item) => {
+        const curLvl = getLvl(item.id);
+        return {
+          id: item.id,
+          name: curLvl > 0 ? `${item.name} (Lv. ${curLvl + 1})` : `Unlock ${item.name}`,
+          desc: item.desc,
+          icon: item.icon,
+          level: curLvl,
+          type: item.type,
+        };
+      });
+
+      setLevelUpOptions(randomUpgrades);
+      engineRef.current.isPaused = true;
+    });
+  };
+
+  const handleReviveAd = () => {
+    // showReviveAd() console stub and full game interaction
+    console.log("showReviveAd(): Displaying high-impact video ad. Restoring spaceship core to 50% HP!");
+    triggerAdFlow("REVIVE", "System Re-Initialization...", () => {
+      const engine = engineRef.current;
+      setHasRevivedThisRun(true);
+      engine.player.hp = Math.floor(engine.player.maxHp * 0.5);
+
+      // Clear adjacent enemies for safety with blast wave
+      engine.enemies = [];
+      engine.projectiles = [];
+      
