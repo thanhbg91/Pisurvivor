@@ -1,5 +1,3 @@
-declare const Pi: any;
-
 import React, { useState, useEffect, useRef } from "react";
 import {
   Play, Flame, Shield, Activity, Sparkles, RotateCcw, Heart, Zap,
@@ -87,35 +85,8 @@ interface HighScore {
   level: number;
   date: string;
 }
-const GOLD_PER_PI = 100;
-const SHOP_CONFIG = {
-  health: { name: "NANOSHIELD ARMOR", baseCost: 150, maxLevel: 5, step: 150 },
-  speed: { name: "REACTOR THRUSTERS", baseCost: 200, maxLevel: 5, step: 200 },
-  damage: { name: "PLASMA ACCELERATORS", baseCost: 250, maxLevel: 5, step: 250 },
-  magnet: { name: "GRAVITY MAGNET", baseCost: 100, maxLevel: 5, step: 100 },
-  regen: { name: "BIOMETRIC REGEN", baseCost: 300, maxLevel: 5, step: 300 }
-};
-
-
 
 export default function App() {
-    // --- CODE ĐĂNG NHẬP PI NETWORK ---
-  const authPiNetwork = async () => {
-    try {
-      const scopes = ['username', 'payments'];
-      const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
-        console.log("Giao dịch treo:", payment);
-      });
-      alert(`Chào mừng Pioneer: ${authResult.user.username}`);
-      return true;
-    } catch (error) {
-      console.error("Lỗi xác thực Pi:", error);
-      alert("Bạn cần cấp quyền đăng nhập Pi để chơi game!");
-      return false;
-    }
-  };
-  // ---------------------------------
-  
   // ==========================================
   // REACT STATE (UI, Overlays, Persistent Upgrades)
   // ==========================================
@@ -136,201 +107,6 @@ export default function App() {
     xpPercent: 0,
     hpPercent: 100,
   });
-
-  // --- HỆ THỐNG KIỂM TRA ĐĂNG NHẬP PI CHUẨN HOÀN THIỆN ---
-  useEffect(() => {
-    const checkPiAuth = async () => {
-            if ((window as any).Pi && !((window as any).Pi.initialized)) {
-        try {
-          (window as any).Pi.init({ version: "2.0", sandbox: true });
-          (window as any).Pi.initialized = true;
-        } catch (e) {
-          console.error("Lỗi kích hoạt ví:", e);
-        }
-            }
-      
-      if (gameState === "PLAYING") {
-        // Kiểm tra xem trước đó phiên làm việc này đã được xác thực chưa
-        const isAlreadyAuthed = sessionStorage.getItem("pi_authed");
-        if (isAlreadyAuthed === "true") {
-          return; // Đã đăng nhập rồi thì cho vào thẳng game, không gọi Pi SDK nữa
-        }
-
-        try {
-          const scopes = ['username', 'payments'];
-          const authResult = await (window as any).Pi.authenticate(scopes, (payment: any) => {
-            console.log("Giao dịch treo:", payment);
-          });
-          
-          alert(`Chào mừng Pioneer: ${authResult.user.username}`);
-          // Lưu trạng thái đã xác thực thành công vào bộ nhớ tạm của phiên chơi
-          sessionStorage.setItem("pi_authed", "true");
-          
-        } catch (error) {
-          console.error("Lỗi đăng nhập Pi:", error);
-          alert("Bạn cần cấp quyền đăng nhập tài khoản Pi để có thể trải nghiệm game!");
-          setGameState("START"); // Đá về màn hình chờ nếu lỗi hoặc từ chối
-        }
-      }
-    };
-    
-    checkPiAuth();
-  }, [gameState]);
-  // ---------------------------------------------------------------------
-  const handlePurchaseAndUpgrade = async (key: "damage" | "health" | "speed" | "magnet" | "regen") => {
-        // --- KÍCH HOẠT VÍ NGAY KHI ẤN NÚT UPGRADE ---
-    if ((window as any).Pi && !((window as any).Pi.initialized)) {
-      try {
-        (window as any).Pi.init({ version: "2.0", sandbox: true });
-        (window as any).Pi.initialized = true;
-      } catch (e) {
-        console.error("Lỗi kích hoạt ví:", e);
-      }
-    }
-    // --------------------------------------------
-    
-    const config = SHOP_CONFIG[key];
-    const currentLevel = shopUpgrades[key] || 0;
-
-    if (currentLevel >= config.maxLevel) {
-      alert("Tính năng này đã đạt cấp tối đa (MAXED)!");
-      return;
-    }
-
-    const currentCost = config.baseCost + (currentLevel * config.step);
-
-    if (metaGold >= currentCost) {
-      const remainingGold = metaGold - currentCost;
-      const updatedUpgrades = { ...shopUpgrades, [key]: currentLevel + 1 };
-      setMetaGold(remainingGold);
-      setShopUpgrades(updatedUpgrades);
-      localStorage.setItem("pioneer_meta_gold", remainingGold.toString());
-      localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(updatedUpgrades));
-      alert(`Nâng cấp thành công ${config.name}!`);
-      return;
-    }
-
-    const missingGold = currentCost - metaGold;
-    const piAmountNeeded = parseFloat((missingGold / GOLD_PER_PI).toFixed(4));
-
-    if (!(window as any).Pi) {
-      alert("Vui lòng mở game trong Pi Browser để thanh toán bằng ví Pi!");
-      return;
-    }
-
-    const confirmPayment = window.confirm(
-      `Bạn thiếu ${missingGold} Xu. Bạn có muốn thanh toán ${piAmountNeeded} Pi để hoàn tất nâng cấp không?`
-    );
-    if (!confirmPayment) return;
-
-    try {
-  await (window as any).Pi.createPayment({
-    amount: piAmountNeeded,
-    memo: `Mua xu nâng cấp ${config.name} trong game Survivor Pi`,
-    metadata: { upgrade_key: key, missing_gold: missingGold },
-  }, {
-    // 1. Gửi lệnh phê duyệt (Approve) lên Server của bạn
-    onReadyForServerApproval: async (paymentId: string) => {
-      try {
-        const response = await fetch('https://pi-game-backend.onrender.com/approve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentId })
-        });
-        if (!response.ok) throw new Error("Server duyệt lỗi");
-      } catch (err) {
-        console.error("Lỗi gửi phê duyệt:", err);
-      }
-    },
-
-    // 2. Gửi lệnh hoàn thành (Complete) lên Server của bạn khi người dùng ký ví xong
-    onAllInteractionsComplete: async (paymentId: string, txid: string) => {
-      try {
-        const response = await fetch('https://pi-game-backend.onrender.com/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentId, txid })
-        });
-        
-        if (response.ok) {
-          // Xử lý cộng tài nguyên trong game sau khi Server xác nhận thành công
-          const remainingGold = metaGold - currentCost; // Logic tính toán của bạn
-          const updatedUpgrades = { ...shopUpgrades, [key]: currentLevel + 1 };
-          setMetaGold(remainingGold);
-          setShopUpgrades(updatedUpgrades);
-          localStorage.setItem("pioneer_meta_gold", remainingGold.toString());
-          localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(updatedUpgrades));
-          
-          alert(`Nâng cấp thành công ${config.name}!`);
-        } else {
-          alert("Lỗi xác nhận hoàn thành giao dịch từ Server!");
-        }
-      } catch (err) {
-        console.error("Lỗi hoàn thành giao dịch:", err);
-      }
-    },
-    onCancel: (paymentId: string) => { 
-      console.log("Người dùng đã hủy thanh toán:", paymentId); 
-    },
-    onError: (error: any, payment: any) => { 
-      console.error("Lỗi cổng thanh toán Pi:", error);
-      alert("Đã xảy ra lỗi trong quá trình thanh toán Pi.");
-    }
-  });
-} catch (e) {
-  console.error("Lỗi khởi tạo thanh toán:", e);
-}
-
-  };
-  
-  
-    // --- HÀM GỌI VÍ PI TESTNET THANH TOÁN VẬT PHẨM ---
-  const handlePiPayment = async (amount: number, itemName: string) => {
-    try {
-      // 1. Tạo dữ liệu đơn hàng
-      const paymentData = {
-        amount: amount, // Số tiền Pi (Ví dụ: 15 hoặc 25)
-        memo: `Mua ${itemName} trong game Survivor pi`, // Ghi chú ví
-        metadata: { item_id: itemName.toLowerCase().replace(/\s+/g, '_') },
-      };
-
-      // 2. Định nghĩa các hàm callback xử lý vòng đời giao dịch của Pi
-      const callbacks = {
-        // Trình duyệt Pi Browser gọi khi giao dịch được tạo trên blockchain thành công
-        onReadyForServerApproval: (paymentId: string) => {
-          console.log("Giao dịch chuẩn bị phê duyệt:", paymentId);
-          // Đối với môi trường Sandbox thử nghiệm, chúng ta cho phép duyệt thẳng tự động
-          alert("Hệ thống đang phê duyệt đơn hàng...");
-        },
-        // Trình duyệt gọi khi người chơi đã nhập mật khẩu 24 từ và ký duyệt chuyển Pi
-        onReadyForServerCompletion: (paymentId: string, txid: string) => {
-          console.log("Người chơi đã ký chuyển tiền. TxID:", txid);
-          alert(`Thanh toán thành công ${amount} Pi! Bạn đã được nâng cấp.`);
-          
-          // --- CHÈN LOGIC NÂNG CẤP CHỈ SỐ GAME CỦA BẠN TẠI ĐÂY ---
-          // Ví dụ: logicNangCapVatPham(itemName);
-        },
-        // Gọi khi người dùng chủ động bấm nút hủy bỏ giao dịch/đóng ví
-        onCancel: (paymentId: string) => {
-          alert("Bạn đã hủy bỏ giao dịch thanh toán ví Pi.");
-        },
-        // Gọi khi hệ thống blockchain của Pi phát sinh lỗi mạng
-        onError: (error: any, payment?: any) => {
-          console.error("Lỗi giao dịch ví Pi:", error);
-          alert("Giao dịch thất bại. Vui lòng kiểm tra lại số dư ví Pi Testnet!");
-        }
-      };
-
-      // 3. Kích hoạt gọi ví Pi bật lên màn hình
-      await (window as any).Pi.createPayment(paymentData, callbacks);
-
-    } catch (error) {
-      console.error("Lỗi khởi tạo ví Pi:", error);
-      alert("Không thể kết nối đến Ví Pi Network!");
-    }
-  };
-  // ----------------------------------------------------
-
 
   const [finalStats, setFinalStats] = useState({
     time: "00:00",
@@ -1036,8 +812,8 @@ export default function App() {
       // Clear adjacent enemies for safety with blast wave
       engine.enemies = [];
       engine.projectiles = [];
-      
-     // Create a gorgeous massive star particle explosion
+
+      // Create a gorgeous massive star particle explosion
       for (let i = 0; i < 60; i++) {
         const a = (i / 60) * Math.PI * 2;
         const spd = 5 + Math.random() * 8;
@@ -1084,15 +860,26 @@ export default function App() {
     });
   };
 
-  // ====================================================
-// // PERMANENT META UPGRADE SHOP HANDLERS
-// ====================================================
-const buyShopUpgrade = (key: any) => {
-  const standardizedKey = String(key).toLowerCase() as "damage" | "health" | "speed" | "magnet" | "regen";
-  handlePurchaseAndUpgrade(standardizedKey);
-  playSfx("upgrade");
-};
+  // ==========================================
+  // PERMANENT META UPGRADE SHOP HANDLERS
+  // ==========================================
+  const buyShopUpgrade = (key: keyof typeof shopUpgrades, cost: number) => {
+    if (metaGold >= cost && shopUpgrades[key] < 5) {
+      setMetaGold((prev) => {
+        const next = prev - cost;
+        localStorage.setItem("pioneer_meta_gold", next.toString());
+        return next;
+      });
 
+      setShopUpgrades((prev: any) => {
+        const next = { ...prev, [key]: prev[key] + 1 };
+        localStorage.setItem("pioneer_shop_upgrades", JSON.stringify(next));
+        return next;
+      });
+
+      playSfx("upgrade");
+    }
+  };
 
   const resetSaveData = () => {
     if (confirm("Are you sure you want to reset all permanent stats, high scores, and gold?")) {
@@ -1530,8 +1317,8 @@ const buyShopUpgrade = (key: any) => {
         const finalTime = timeStr;
         const finalKills = engine.player.kills;
         const finalLevel = engine.player.level;
-          
-setFinalStats({
+
+        setFinalStats({
           time: finalTime,
           kills: finalKills,
           gold: earnedGold,
@@ -2037,7 +1824,8 @@ setFinalStats({
       };
     }
   };
-const handleTouchMove = (e: React.TouchEvent) => {
+
+  const handleTouchMove = (e: React.TouchEvent) => {
     if (gameState !== "PLAYING" || !engineRef.current.joystick.active) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -2192,14 +1980,15 @@ const handleTouchMove = (e: React.TouchEvent) => {
                       </div>
 
                       <button
-  disabled={maxed}
-  onClick={() => buyShopUpgrade(item.key)}
-  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition transform active:scale-95 min-w-[80px] text-center ${
-    maxed
-      ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
-      : "bg-brand-accent text-white"
-  }`}
-
+                        disabled={maxed || metaGold < item.cost}
+                        onClick={() => buyShopUpgrade(item.key as any, item.cost)}
+                        className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer min-w-[72px] rounded-lg ${
+                          maxed
+                            ? "bg-slate-100 text-brand-muted/40 border-brand-border"
+                            : metaGold >= item.cost
+                            ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
+                            : "bg-slate-100 text-brand-muted/50 border-brand-border"
+                        }`}
                       >
                         {maxed ? (
                           <span>MAXED</span>
@@ -2373,7 +2162,7 @@ const handleTouchMove = (e: React.TouchEvent) => {
             3. LEVEL UP OVERLAY SELECTION
             ========================================== */}
         {isLevelUp && (
-        <div className="absolute inset-0 z-40 bg-slate-900/45 backdrop-blur-md flex flex-col justify-center items-center p-6 space-y-6 animate-fade-in dot-matrix">
+          <div className="absolute inset-0 z-40 bg-slate-900/45 backdrop-blur-md flex flex-col justify-center items-center p-6 space-y-6 animate-fade-in dot-matrix">
             <div className="text-center">
               <div className="inline-block border border-brand-accent/20 bg-brand-accent/5 px-2.5 py-0.5 rounded text-[9px] font-mono text-brand-accent uppercase tracking-widest mb-1.5">
                 Evolution Protocol Active
