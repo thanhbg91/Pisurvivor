@@ -89,11 +89,11 @@ interface HighScore {
 }
 const GOLD_PER_PI = 100;
 const SHOP_CONFIG = {
-  health: { name: "NANOSHIELD ARMOR", baseCost: 15, maxLevel: 5, step: 15 },
-  speed: { name: "REACTOR THRUSTERS", baseCost: 20, maxLevel: 5, step: 20 },
-  damage: { name: "PLASMA ACCELERATORS", baseCost: 25, maxLevel: 5, step: 25 },
-  magnet: { name: "GRAVITY MAGNET", baseCost: 10, maxLevel: 5, step: 10 },
-  regen: { name: "BIOMETRIC REGEN", baseCost: 30, maxLevel: 5, step: 30 }
+  health: { name: "NANOSHIELD ARMOR", baseCost: 150, maxLevel: 5, step: 150 },
+  speed: { name: "REACTOR THRUSTERS", baseCost: 200, maxLevel: 5, step: 200 },
+  damage: { name: "PLASMA ACCELERATORS", baseCost: 250, maxLevel: 5, step: 250 },
+  magnet: { name: "GRAVITY MAGNET", baseCost: 100, maxLevel: 5, step: 100 },
+  regen: { name: "BIOMETRIC REGEN", baseCost: 300, maxLevel: 5, step: 300 }
 };
 
 
@@ -2139,15 +2139,14 @@ const buyShopUpgrade = (key: any) => {
                       </div>
 
                       <button
-                        disabled={maxed || metaGold < item.cost}
-                        onClick={() => buyShopUpgrade(item.key as any, item.cost)}
-                        className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer min-w-[72px] rounded-lg ${
-                          maxed
-                            ? "bg-slate-100 text-brand-muted/40 border-brand-border"
-                            : metaGold >= item.cost
-                            ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
-                            : "bg-slate-100 text-brand-muted/50 border-brand-border"
-                        }`}
+  disabled={maxed}
+  onClick={() => buyShopUpgrade(item.key)}
+  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition transform active:scale-95 min-w-[80px] text-center ${
+    maxed
+      ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+      : "bg-brand-accent text-white"
+  }`}
+
                       >
                         {maxed ? (
                           <span>MAXED</span>
