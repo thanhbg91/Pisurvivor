@@ -2339,4 +2339,192 @@ const handleTouchMove = (e: React.TouchEvent) => {
             3. LEVEL UP OVERLAY SELECTION
             ========================================== */}
         {isLevelUp && (
-        
+        <div className="absolute inset-0 z-40 bg-slate-900/45 backdrop-blur-md flex flex-col justify-center items-center p-6 space-y-6 animate-fade-in dot-matrix">
+            <div className="text-center">
+              <div className="inline-block border border-brand-accent/20 bg-brand-accent/5 px-2.5 py-0.5 rounded text-[9px] font-mono text-brand-accent uppercase tracking-widest mb-1.5">
+                Evolution Protocol Active
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-800 font-display uppercase">
+                TACTICAL ADAPTATION
+              </h2>
+              <p className="text-xs text-brand-muted mt-1 font-sans">Choose engineering update to load</p>
+            </div>
+
+            {/* Upgrades List Cards */}
+            <div className="space-y-3 w-full max-w-[360px]">
+              {levelUpOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => applyUpgrade(opt)}
+                  className="w-full flex items-center space-x-4 bg-brand-card hover:bg-slate-50 border-2 border-brand-border hover:border-brand-accent/60 p-3.5 rounded-xl text-left cursor-pointer transition transform hover:-translate-y-0.5 active:translate-y-0 geo-shadow-sm hover:geo-shadow-accent"
+                >
+                  <div className="p-2 bg-slate-50 border border-brand-border rounded-lg shrink-0 text-brand-accent">
+                    {opt.icon}
+                  </div>
+                  <div className="space-y-0.5 flex-1">
+                    <span className="text-xs font-bold text-slate-800 font-display block uppercase">{opt.name}</span>
+                    <span className="text-[10px] text-slate-600 block leading-tight font-sans">{opt.desc}</span>
+                  </div>
+                  <div className="text-[9px] font-mono font-bold border border-brand-border px-1.5 py-0.5 rounded bg-brand-card text-brand-accent">
+                    Lv.{opt.level}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Ad Reroll Button (Ad Monetization Stub) */}
+            <div className="pt-2 w-full max-w-[360px]">
+              <button
+                onClick={handleRerollAd}
+                className="w-full py-2.5 bg-brand-card hover:bg-red-50 border-2 border-red-200 hover:border-red-400 text-[#ef4444] font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span className="font-mono uppercase tracking-wider text-[10px]">Reroll options (Watch Broadcast)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            4. GAME OVER SCREEN OVERLAY
+            ========================================== */}
+        {gameState === "GAMEOVER" && (
+          <div className="absolute inset-0 z-30 bg-gradient-to-b from-slate-50 via-brand-card to-slate-100 flex flex-col justify-between p-6 overflow-y-auto dot-matrix">
+            {/* Defeat Banner */}
+            <div className="text-center mt-6">
+              <div className="inline-block border border-rose-500/20 bg-rose-500/5 px-2.5 py-0.5 rounded text-[9px] font-mono text-rose-500 uppercase tracking-widest mb-1">
+                Telemetry Interrupted
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight text-rose-500 font-display uppercase">
+                MISSION OVER
+              </h1>
+              <p className="text-[10px] text-brand-muted font-mono uppercase mt-0.5">Pioneer unit offline // core compromised</p>
+            </div>
+
+            {/* Run statistics */}
+            <div className="bg-brand-card border border-brand-border rounded-xl p-5 space-y-4 max-w-[380px] mx-auto w-full geo-shadow">
+              <h3 className="text-[11px] font-bold tracking-wider text-brand-accent border-b border-brand-border pb-1.5 uppercase font-mono flex items-center justify-between">
+                <span>Log Extract Report</span>
+                <span className="text-brand-muted font-normal text-[9px]">ID: 409-SWARM</span>
+              </h3>
+              <div className="space-y-3 text-xs font-mono">
+                <div className="flex justify-between items-center">
+                  <span className="text-brand-muted">Mission Duration:</span>
+                  <span className="text-slate-800 font-bold">{finalStats.time}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-brand-muted">Invaders Defeated:</span>
+                  <span className="text-rose-400 font-bold">{finalStats.kills} Kills</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-brand-muted">Evolution Level:</span>
+                  <span className="text-indigo-400 font-bold">Level {finalStats.level}</span>
+                </div>
+                <div className="flex justify-between items-center border-t border-brand-border pt-3 font-sans font-bold">
+                  <span className="text-brand-accent flex items-center space-x-1.5 uppercase text-[10px] tracking-wider font-display">
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>Credits Retrieved:</span>
+                  </span>
+                  <span className="text-brand-accent font-mono text-sm font-bold">{finalStats.gold} ¢</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Ad Monetization Actions (Revive & Double Gold) */}
+            <div className="space-y-3 max-w-[380px] mx-auto w-full px-2">
+              {!hasRevivedThisRun && (
+                <button
+                  onClick={handleReviveAd}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer geo-shadow-indigo active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                >
+                  <Heart className="w-4 h-4 fill-current text-white" />
+                  <span className="font-display uppercase tracking-wider text-xs">Revive (Watch Broadcast)</span>
+                </button>
+              )}
+
+              {!doubleGoldApplied && (
+                <button
+                  onClick={handleDoubleGoldAd}
+                  className="w-full py-2.5 bg-brand-card hover:bg-slate-50 border border-brand-accent/20 hover:border-brand-accent/40 text-brand-accent font-bold rounded-lg text-xs flex items-center justify-center space-x-2 transition cursor-pointer"
+                >
+                  <Coins className="w-4 h-4" />
+                  <span className="font-mono uppercase tracking-wider text-[10px]">Double Gold (Watch Broadcast)</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setGameState("START")}
+                className="w-full py-3 bg-brand-card hover:bg-slate-50 border border-brand-border hover:border-brand-muted/40 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition cursor-pointer"
+              >
+                <span className="font-display uppercase tracking-widest">Return to Base</span>
+                <ArrowRight className="w-4 h-4 ml-1 text-brand-accent" />
+              </button>
+            </div>
+
+            <div className="text-center text-[9px] text-brand-muted font-mono pb-2">
+              Engine status preserved. Local save-state synchronized automatically.
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            5. AD PLAYBACK ANIMATED MODAL OVERLAY
+            ========================================== */}
+        {adState.visible && (
+          <div className="absolute inset-0 z-50 bg-slate-50 flex flex-col justify-between p-6 dot-matrix animate-fade-in">
+            <div className="text-center mt-6">
+              <div className="text-[10px] text-brand-accent font-mono tracking-widest uppercase mb-1">
+                // Broadcaster Link Established
+              </div>
+              <h2 className="text-lg font-bold tracking-tight text-slate-800 font-display uppercase">
+                {adState.title}
+              </h2>
+            </div>
+
+            {/* Interactive video simulation loader */}
+            <div className="my-4 flex flex-col items-center justify-center flex-1">
+              <div className="w-full max-w-[280px] aspect-[4/3] bg-brand-card border-2 border-brand-border rounded-xl flex flex-col items-center justify-center p-4 relative overflow-hidden geo-shadow">
+                <div className="absolute top-2 left-2 flex items-center space-x-1 text-[8px] text-brand-muted font-mono">
+                  <span>Broadcast Signal</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                </div>
+
+                {/* Animated graphic for sponsored space game */}
+                <div className="space-y-2 text-center animate-pulse z-10">
+                  <div className="flex justify-center text-brand-accent">
+                    <Star className="w-8 h-8 animate-spin" />
+                  </div>
+                  <h4 className="text-xs font-bold tracking-wide text-brand-accent font-display uppercase">Space Cadet Academies</h4>
+                  <p className="text-[10px] text-slate-600 max-w-[180px] leading-relaxed mx-auto font-sans">
+                    Register now to pilot tactical cruisers across high-density outer solar sectors!
+                  </p>
+                </div>
+
+                {/* Cyber backdrop lines */}
+                <div className="absolute inset-0 border border-brand-border/10 grid grid-cols-6 pointer-events-none">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="border-r border-brand-border/5 h-full" />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Simulated Countdown progress bar */}
+            <div className="space-y-3 max-w-[320px] mx-auto w-full pb-6">
+              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden border border-brand-border">
+                <div
+                  className="h-full bg-gradient-to-r from-brand-accent to-indigo-500 transition-all duration-100"
+                  style={{ width: `${(adState.timer / 1.5) * 100}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-brand-muted">
+                <span>Hold link for rewards...</span>
+                <span className="font-bold text-brand-accent">{Math.ceil(adState.timer)}s remaining</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
