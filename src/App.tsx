@@ -158,7 +158,12 @@ export default function App() {
   const [piAuthenticated, setPiAuthenticated] = useState(false);
   const [piPaymentStatus, setPiPaymentStatus] = useState<"idle" | "authenticating" | "creating" | "approving" | "completing" | "success" | "error" | "cancelled">("idle");
   const [piPaymentError, setPiPaymentError] = useState("");
-  const [payWithPiMode, setPayWithPiMode] = useState(false);
+  const [payWithPiMode, setPayWithPiMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!(window as any).Pi;
+    }
+    return false;
+  });
 
   // Sync state setters to window globally so asynchronous callbacks from the Pi SDK
   // can target the mounted component instance correctly in React StrictMode/HMR double renders.
@@ -168,6 +173,7 @@ export default function App() {
       (window as any).__setPiAuthenticated = setPiAuthenticated;
       (window as any).__setPiPaymentStatus = setPiPaymentStatus;
       (window as any).__setPiPaymentError = setPiPaymentError;
+      (window as any).__setPayWithPiMode = setPayWithPiMode;
     }
   });
 
@@ -889,6 +895,10 @@ export default function App() {
       const sandboxMode = (import.meta as any).env?.VITE_PI_SANDBOX !== "false";
       const Pi = (window as any).Pi;
 
+      // Force Pi payment mode by default since we are running in Pi Browser
+      if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
+      else setPayWithPiMode(true);
+
       // 1. Ensure Pi.init is called EXACTLY once
       if (!(window as any).__piInitialized) {
         try {
@@ -916,6 +926,8 @@ export default function App() {
         console.log("[Pi SDK] Restoring authenticated user:", (window as any).__piUser.username);
         setPiUser((window as any).__piUser);
         setPiAuthenticated(true);
+        if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
+        else setPayWithPiMode(true);
         setPiPaymentStatus("idle");
         return;
       }
@@ -965,6 +977,9 @@ export default function App() {
 
               if ((window as any).__setPiAuthenticated) (window as any).__setPiAuthenticated(true);
               else setPiAuthenticated(true);
+
+              if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
+              else setPayWithPiMode(true);
 
               if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
               else setPiPaymentStatus("idle");
