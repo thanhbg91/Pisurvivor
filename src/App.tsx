@@ -900,26 +900,32 @@ export default function App() {
       else setPayWithPiMode(true);
 
       // 1. Ensure Pi.init is called EXACTLY once
-      if (!(window as any).__piInitialized) {
-        try {
-          Pi.init({ version: "1.5", sandbox: sandboxMode });
-          (window as any).__piInitialized = true;
-          console.log(`[Pi SDK] Pi SDK Initialized in ${sandboxMode ? "sandbox" : "production"} mode.`);
-        } catch (err: any) {
-          console.warn("[Pi SDK] Error during Pi.init:", err);
-          const errMsg = err?.message || String(err);
-          if (errMsg.toLowerCase().includes("already initialized")) {
-            (window as any).__piInitialized = true;
-          } else {
-            console.warn("[Pi SDK] Aborting authentication due to init failure.");
-            setPiPaymentStatus("error");
-            setPiPaymentError(`Pi SDK initialization failed: ${errMsg}`);
-            return;
-          }
-        }
+      // 1. Ensure Pi.init is called EXACTLY once
+if (!(window as any).__piInitialized) {
+  if (typeof (window as any).Pi !== 'undefined') {
+    try {
+      (window as any).Pi.init({ version: "1.5", sandbox: sandbox });
+      (window as any).__piInitialized = true;
+      console.log(`[Pi SDK] Pi SDK Initialized!`);
+    } catch (err: any) {
+      console.warn("[Pi SDK] Error during Pi.init, masking as initialized", err);
+      const errMsg = err?.message || String(err);
+      if (errMsg.toLowerCase().includes("already initialized")) {
+        (window as any).__piInitialized = true;
       } else {
-        console.log("[Pi SDK] Pi SDK already initialized previously.");
+        console.warn("[Pi SDK] Aborting auth workflow due to init failure");
+        setPiPaymentStatus("error");
+        setPiPaymentError('Pi SDK initialization failed');
+        return;
       }
+    }
+  } else {
+    console.warn("[Pi SDK] Pi object is not found. Running outside Pi Browser?");
+  }
+} else {
+  console.log("[Pi SDK] Pi SDK already initialized");
+}
+
 
       // 2. Check if we already have authenticated user stored globally
       if ((window as any).__piAuthenticated && (window as any).__piUser) {
