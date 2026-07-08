@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-
 @theme {
   --font-sans: "Plus Jakarta Sans", "Inter", sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  
+
   --color-brand-bg: #f1f5f9;
   --color-brand-card: #ffffff;
   --color-brand-border: #cbd5e1;
   --color-brand-accent: #b45309;
   --color-brand-muted: #475569;
 }
+
+@import url('https://googleapis.com');
+
 
 /* Geometric Grid Background Pattern */
 .geometric-grid {
