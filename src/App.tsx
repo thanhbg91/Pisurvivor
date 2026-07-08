@@ -904,7 +904,8 @@ export default function App() {
 if (!(window as any).__piInitialized) {
   if (typeof (window as any).Pi !== 'undefined') {
     try {
-      (window as any).Pi.init({ version: "1.5", sandbox: sandbox });
+      (window as any).Pi.init({ version: "1.5", sandbox: true });
+
       (window as any).__piInitialized = true;
       console.log(`[Pi SDK] Pi SDK Initialized!`);
     } catch (err: any) {
