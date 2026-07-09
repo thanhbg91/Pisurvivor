@@ -1036,9 +1036,18 @@ if (!(window as any).__piInitialized) {
       setPiPaymentStatus("creating");
       setPiPaymentError("");
 
-      try {
-        const Pi = (window as any).Pi;
-        Pi.createPayment(
+        try {
+    const Pi = (window as any).Pi;
+    if (!Pi) {
+      alert('Hệ thống Pi đang khởi động, vui lòng đợi 2 giây và thử lại.');
+      return;
+    }
+    if (!(window as any).__piInitialized) {
+      try { Pi.init({ version: "1.5", sandbox: true }); } catch(e){}
+    }
+
+    Pi.createPayment(
+
           {
             amount: piAmount,
             memo: `Pioneer Upgrade: ${key === "damage" ? "Plasma Accelerators" : key === "health" ? "Nanoshield Armor" : key === "speed" ? "Reactor Thrusters" : key === "magnet" ? "Quantum Harvester" : "Nanite Repair Systems"} (Level ${shopUpgrades[key] + 1})`,
