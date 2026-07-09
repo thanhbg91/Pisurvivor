@@ -164,6 +164,8 @@ export default function App() {
     }
     return false;
   });
+  const [piApiKeyConfigured, setPiApiKeyConfigured] = useState<boolean | null>(null);
+  const [shopTab, setShopTab] = useState<"upgrades" | "exchange">("upgrades");
 
   // Sync state setters to window globally so asynchronous callbacks from the Pi SDK
   // can target the mounted component instance correctly in React StrictMode/HMR double renders.
@@ -174,6 +176,7 @@ export default function App() {
       (window as any).__setPiPaymentStatus = setPiPaymentStatus;
       (window as any).__setPiPaymentError = setPiPaymentError;
       (window as any).__setPayWithPiMode = setPayWithPiMode;
+      (window as any).__setPiApiKeyConfigured = setPiApiKeyConfigured;
     }
   });
 
@@ -889,142 +892,143 @@ export default function App() {
   // ==========================================
   // PERMANENT META UPGRADE SHOP HANDLERS
   // ==========================================
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).Pi) {
-      console.log("[Pi SDK] Checking Pi SDK state...");
-      const sandboxMode = (import.meta as any).env?.VITE_PI_SANDBOX !== "false";
-      const Pi = (window as any).Pi;
+  const handlePiAuth = async () => {
+    if (typeof window === "undefined" || !(window as any).Pi) {
+      console.log("[Pi SDK] Pi SDK not available.");
+      return;
+    }
+    const Pi = (window as any).Pi;
+    const sandboxMode = (import.meta as any).env?.VITE_PI_SANDBOX !== "false";
 
-      // Force Pi payment mode by default since we are running in Pi Browser
+    if ((window as any).__piAuthenticating) {
+      console.log("[Pi SDK] Authentication is already in progress, skipping duplicate call.");
+      return;
+    }
+
+    (window as any).__piAuthenticating = true;
+    
+    if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("authenticating");
+    else setPiPaymentStatus("authenticating");
+
+    if ((window as any).__setPiPaymentError) (window as any).__setPiPaymentError("");
+    else setPiPaymentError("");
+
+    try {
+      // 1. Ensure Pi.init is treated as a Promise and fully awaited
+      if (!(window as any).__piInitialized) {
+        console.log(`[Pi SDK] Initializing Pi SDK in ${sandboxMode ? "sandbox" : "production"} mode...`);
+        await Pi.init({ version: "1.5", sandbox: sandboxMode });
+        (window as any).__piInitialized = true;
+        console.log("[Pi SDK] Pi SDK Initialized successfully.");
+      } else {
+        console.log("[Pi SDK] Pi SDK already initialized.");
+      }
+
+      // Force Pi payment mode by default
       if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
       else setPayWithPiMode(true);
 
-      // 1. Ensure Pi.init is called EXACTLY once
-      // 1. Ensure Pi.init is called EXACTLY once
-if (!(window as any).__piInitialized) {
-  if (typeof (window as any).Pi !== 'undefined') {
-    try {
-      (window as any).Pi.init({ version: "1.5", sandbox: true });
+      // 2. Perform Pi.authenticate using the 'username' scope and handle incomplete payments
+      console.log("[Pi SDK] Initiating Pi.authenticate...");
+      const auth = await Pi.authenticate(["username", "payments"], (incompletePayment: any) => {
+        console.log("[Pi SDK] Incomplete payment found:", incompletePayment);
+        fetch("/api/pi/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentId: incompletePayment.identifier,
+            txid: incompletePayment.transaction?.txid,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            console.log("[Pi SDK] Incomplete payment resolved:", data);
+          })
+          .catch((err) => {
+            console.warn("[Pi SDK] Failed to resolve incomplete payment:", err);
+          });
+      });
 
-      (window as any).__piInitialized = true;
-      console.log(`[Pi SDK] Pi SDK Initialized!`);
-      if (typeof setPiPaymentStatus === 'function') setPiPaymentStatus('ready');
-          (window as any).Pi.authenticate(['username', 'payments'], (payment: any) => {
-      console.log('Giao dịch chưa hoàn thành:', payment);
-    }).then((auth: any) => {
-      console.log('Đăng nhập Pi thành công:', auth.user.username);
-    }).catch((error: any) => {
-      console.error('Lỗi xác thực Pi:', error);
-    });
-      
-    } catch (err: any) {
-      console.warn("[Pi SDK] Error during Pi.init, masking as initialized", err);
-      const errMsg = err?.message || String(err);
-      if (errMsg.toLowerCase().includes("already initialized")) {
-        (window as any).__piInitialized = true;
-      } else {
-        console.warn("[Pi SDK] Aborting auth workflow due to init failure");
-        setPiPaymentStatus("error");
-        setPiPaymentError('Pi SDK initialization failed');
-        return;
+      console.log("[Pi SDK] Client authentication successful. Verifying token on backend...", auth);
+
+      // 3. Send access token to backend for authorization check (v2/me)
+      const res = await fetch("/api/pi/authenticate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ accessToken: auth.accessToken }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Backend token validation failed");
       }
+
+      const backendData = await res.json();
+      console.log("[Pi SDK] Backend verification succeeded. Established session for user:", backendData.user);
+
+      const validatedUser = backendData.user || auth.user;
+
+      // Store globally to retain state across mounts/StrictMode re-renders
+      (window as any).__piUser = validatedUser;
+      (window as any).__piAuthenticated = true;
+      (window as any).__piAuthenticating = false;
+
+      // Dispatch to state setters
+      if ((window as any).__setPiUser) (window as any).__setPiUser(validatedUser);
+      else setPiUser(validatedUser);
+
+      if ((window as any).__setPiAuthenticated) (window as any).__setPiAuthenticated(true);
+      else setPiAuthenticated(true);
+
+      if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
+      else setPayWithPiMode(true);
+
+      if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
+      else setPiPaymentStatus("idle");
+    } catch (err: any) {
+      console.warn("[Pi SDK] Authentication workflow failed:", err);
+      (window as any).__piAuthenticating = false;
+
+      const errMsg = err?.message || String(err);
+      if ((window as any).__setPiPaymentError) (window as any).__setPiPaymentError(errMsg);
+      else setPiPaymentError(errMsg);
+
+      if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
+      else setPiPaymentStatus("idle");
     }
-  } else {
-    console.warn("[Pi SDK] Pi object is not found. Running outside Pi Browser?");
-  }
-} else {
-  console.log("[Pi SDK] Pi SDK already initialized");
-}
+  };
 
+  useEffect(() => {
+    // 1. Fetch backend configuration status
+    fetch("/api/pi/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.configured === "boolean") {
+          const setter = (window as any).__setPiApiKeyConfigured || setPiApiKeyConfigured;
+          setter(data.configured);
+        }
+      })
+      .catch((err) => {
+        console.warn("[Pi SDK] Failed to fetch backend status:", err);
+        const setter = (window as any).__setPiApiKeyConfigured || setPiApiKeyConfigured;
+        setter(false);
+      });
 
-      // 2. Check if we already have authenticated user stored globally
+    // 2. Handle Pi SDK Auto-auth
+    if (typeof window !== "undefined" && (window as any).Pi) {
+      // If we are already authenticated and have user data globally, restore it
       if ((window as any).__piAuthenticated && (window as any).__piUser) {
-        console.log("[Pi SDK] Restoring authenticated user:", (window as any).__piUser.username);
+        console.log("[Pi SDK] Restoring existing authenticated session:", (window as any).__piUser.username);
         setPiUser((window as any).__piUser);
         setPiAuthenticated(true);
-        if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
-        else setPayWithPiMode(true);
+        setPayWithPiMode(true);
         setPiPaymentStatus("idle");
-        return;
+      } else {
+        // Automatically trigger authentication on load
+        handlePiAuth();
       }
-
-      // 3. Prevent duplicate authentication requests
-      if ((window as any).__piAuthenticating) {
-        console.log("[Pi SDK] Authentication is already in progress, skipping duplicate call.");
-        return;
-      }
-
-      (window as any).__piAuthenticating = true;
-      setPiPaymentStatus("authenticating");
-
-      // Wrap authenticate in a short setTimeout to allow the Pi Browser connection handshake to settle fully
-      setTimeout(() => {
-        console.log("[Pi SDK] Initiating authentication request...");
-        try {
-          Pi.authenticate(["username", "payments"], (incompletePayment: any) => {
-            console.log("[Pi SDK] Incomplete payment found:", incompletePayment);
-            fetch("/api/pi/complete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                paymentId: incompletePayment.identifier,
-                txid: incompletePayment.transaction?.txid,
-              }),
-            })
-              .then((res) => res.json())
-              .then((data) => {
-                console.log("[Pi SDK] Incomplete payment resolved:", data);
-              })
-              .catch((err) => {
-                console.warn("[Pi SDK] Failed to resolve incomplete payment:", err);
-              });
-          })
-            .then((auth: any) => {
-              console.log("[Pi SDK] Authenticated as user:", auth.user.username);
-              
-              // Store globally
-              (window as any).__piUser = auth.user;
-              (window as any).__piAuthenticated = true;
-              (window as any).__piAuthenticating = false;
-
-              // Dispatch to latest mounted component setters
-              if ((window as any).__setPiUser) (window as any).__setPiUser(auth.user);
-              else setPiUser(auth.user);
-
-              if ((window as any).__setPiAuthenticated) (window as any).__setPiAuthenticated(true);
-              else setPiAuthenticated(true);
-
-              if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
-              else setPayWithPiMode(true);
-
-              if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
-              else setPiPaymentStatus("idle");
-            })
-            .catch((err: any) => {
-              console.warn("[Pi SDK] Authentication failed:", err);
-              (window as any).__piAuthenticating = false;
-              
-              const errMsg = err?.message || String(err);
-              if ((window as any).__setPiPaymentError) (window as any).__setPiPaymentError(errMsg);
-              else setPiPaymentError(errMsg);
-
-              if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
-              else setPiPaymentStatus("idle");
-            });
-        } catch (authInitErr: any) {
-          console.warn("[Pi SDK] Exception during Pi.authenticate:", authInitErr);
-          (window as any).__piAuthenticating = false;
-          
-          const errMsg = authInitErr?.message || String(authInitErr);
-          if ((window as any).__setPiPaymentError) (window as any).__setPiPaymentError(errMsg);
-          else setPiPaymentError(errMsg);
-
-          if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
-          else setPiPaymentStatus("idle");
-        }
-      }, 150);
-    } else {
-      console.log("[Pi SDK] Pi SDK not available in window. Running in standard web mode.");
     }
   }, []);
 
@@ -1036,18 +1040,9 @@ if (!(window as any).__piInitialized) {
       setPiPaymentStatus("creating");
       setPiPaymentError("");
 
-        try {
-    const Pi = (window as any).Pi;
-    if (!Pi) {
-      alert('Hệ thống Pi đang khởi động, vui lòng đợi 2 giây và thử lại.');
-      return;
-    }
-    if (!(window as any).__piInitialized) {
-      try { Pi.init({ version: "1.5", sandbox: true }); } catch(e){}
-    }
-
-    Pi.createPayment(
-
+      try {
+        const Pi = (window as any).Pi;
+        Pi.createPayment(
           {
             amount: piAmount,
             memo: `Pioneer Upgrade: ${key === "damage" ? "Plasma Accelerators" : key === "health" ? "Nanoshield Armor" : key === "speed" ? "Reactor Thrusters" : key === "magnet" ? "Quantum Harvester" : "Nanite Repair Systems"} (Level ${shopUpgrades[key] + 1})`,
@@ -1147,6 +1142,173 @@ if (!(window as any).__piInitialized) {
 
         playSfx("upgrade");
       }
+    }
+  };
+
+  const buyCoinsWithPi = (amountCoins: number, piAmount: number) => {
+    if (payWithPiMode && (window as any).Pi) {
+      setPiPaymentStatus("creating");
+      setPiPaymentError("");
+
+      try {
+        const Pi = (window as any).Pi;
+        Pi.createPayment(
+          {
+            amount: piAmount,
+            memo: `Mua ${amountCoins} Xu (Base Engineering Credits) trong game Pioneer`,
+            metadata: { type: "buy_xu", amountCoins },
+          },
+          {
+            onReadyForServerApproval: (paymentId: string) => {
+              console.log(`[Pi SDK] Buy Xu payment ${paymentId} ready for server approval...`);
+              setPiPaymentStatus("approving");
+              
+              fetch("/api/pi/approve", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ paymentId }),
+              })
+                .then((res) => {
+                  if (!res.ok) throw new Error("Approval server endpoint returned non-200");
+                  return res.json();
+                })
+                .then((data) => {
+                  console.log("[Pi SDK] Server approved Buy Xu payment successfully:", data);
+                })
+                .catch((err) => {
+                  console.warn("[Pi SDK] Server approval for Buy Xu failed:", err);
+                  setPiPaymentStatus("error");
+                  setPiPaymentError("Phê duyệt thanh toán từ Server thất bại.");
+                });
+            },
+            onReadyForServerCompletion: (paymentId: string, txid: string) => {
+              console.log(`[Pi SDK] Buy Xu payment ${paymentId} signed, ready for completion...`);
+              setPiPaymentStatus("completing");
+
+              fetch("/api/pi/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ paymentId, txid }),
+              })
+                .then((res) => {
+                  if (!res.ok) throw new Error("Completion server endpoint returned non-200");
+                  return res.json();
+                })
+                .then((data) => {
+                  console.log("[Pi SDK] Server completed Buy Xu payment successfully:", data);
+                  
+                  // Grant coins
+                  setMetaGold((prev: number) => {
+                    const next = prev + amountCoins;
+                    localStorage.setItem("pioneer_meta_gold", String(next));
+                    return next;
+                  });
+                  
+                  playSfx("upgrade");
+                  setPiPaymentStatus("success");
+                  
+                  setTimeout(() => setPiPaymentStatus("idle"), 3000);
+                })
+                .catch((err) => {
+                  console.warn("[Pi SDK] Server completion for Buy Xu failed:", err);
+                  setPiPaymentStatus("error");
+                  setPiPaymentError("Hoàn thành thanh toán từ Server thất bại.");
+                });
+            },
+            onCancel: (paymentId: string) => {
+              console.log(`[Pi SDK] Buy Xu payment ${paymentId} cancelled by user.`);
+              setPiPaymentStatus("cancelled");
+              setTimeout(() => setPiPaymentStatus("idle"), 2500);
+            },
+            onError: (error: Error, payment?: any) => {
+              console.error("[Pi SDK] Buy Xu payment error:", error, payment);
+              setPiPaymentStatus("error");
+              setPiPaymentError(error?.message || "Lỗi giao dịch.");
+              setTimeout(() => setPiPaymentStatus("idle"), 4000);
+            }
+          }
+        );
+      } catch (err: any) {
+        console.warn("[Pi SDK] Failed to buy xu:", err);
+        setPiPaymentStatus("error");
+        setPiPaymentError(err?.message || "Lỗi khởi tạo giao dịch.");
+        setTimeout(() => setPiPaymentStatus("idle"), 3000);
+      }
+    } else {
+      // Local/Sandbox Mode purchase of xu
+      setPiPaymentStatus("creating");
+      setTimeout(() => {
+        setMetaGold((prev: number) => {
+          const next = prev + amountCoins;
+          localStorage.setItem("pioneer_meta_gold", String(next));
+          return next;
+        });
+        setPiPaymentStatus("success");
+        setTimeout(() => setPiPaymentStatus("idle"), 2000);
+      }, 500);
+    }
+  };
+
+  const sellCoinsForPi = async (amountCoins: number, piAmount: number) => {
+    if (metaGold < amountCoins) {
+      setPiPaymentError(`Bạn không đủ xu để bán (Cần tối thiểu ${amountCoins} xu)`);
+      return;
+    }
+
+    if (!piUser) {
+      setPiPaymentError("Vui lòng đăng nhập ví Pi trước khi bán xu.");
+      return;
+    }
+
+    setPiPaymentStatus("creating");
+    setPiPaymentError("");
+
+    try {
+      console.log(`[Pi SDK] Requesting backend to transfer ${piAmount} π in exchange for ${amountCoins} xu...`);
+      const res = await fetch("/api/pi/sell", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: piUser.uid,
+          username: piUser.username,
+          amountCoins: amountCoins,
+          piAmount: piAmount
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Giao dịch bán xu bị từ chối từ Server.");
+      }
+
+      const data = await res.json();
+      console.log("[Pi SDK] Backend sell response:", data);
+
+      // Deduct coins in client
+      setMetaGold((prev: number) => {
+        const next = Math.max(0, prev - amountCoins);
+        localStorage.setItem("pioneer_meta_gold", String(next));
+        return next;
+      });
+
+      playSfx("upgrade");
+      
+      if (data.simulated) {
+        setPiPaymentStatus("success");
+        setPiPaymentError(`Thành công (Simulated)! Nhận ${piAmount} π. (Chưa cấu hình Wallet Seed)`);
+      } else {
+        setPiPaymentStatus("success");
+      }
+
+      setTimeout(() => {
+        setPiPaymentStatus("idle");
+        setPiPaymentError("");
+      }, 5000);
+    } catch (err: any) {
+      console.warn("[Pi SDK] Failed to sell xu:", err);
+      setPiPaymentStatus("error");
+      setPiPaymentError(err?.message || "Lỗi khi xử lý giao dịch bán xu.");
+      setTimeout(() => setPiPaymentStatus("idle"), 4000);
     }
   };
 
@@ -2224,8 +2386,16 @@ if (!(window as any).__piInitialized) {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span>Pi Network Connected</span>
                     </div>
-                    {piUser && (
+                    {piUser ? (
                       <span className="text-purple-600 font-bold">@{piUser.username}</span>
+                    ) : (
+                      <button
+                        onClick={handlePiAuth}
+                        disabled={piPaymentStatus === "authenticating"}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded cursor-pointer transition duration-150 shadow-sm"
+                      >
+                        {piPaymentStatus === "authenticating" ? "Signing In..." : "Sign In"}
+                      </button>
                     )}
                   </div>
                   
@@ -2250,75 +2420,199 @@ if (!(window as any).__piInitialized) {
                 </div>
               )}
 
-              {/* Individual Shop Upgrade Slots */}
-              <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
-                {[
-                  { key: "damage", label: "Plasma Accelerators", icon: <Zap className="w-3.5 h-3.5" />, cost: (shopUpgrades.damage + 1) * 20, desc: "+15% Damage scaling" },
-                  { key: "health", label: "Nanoshield Armor", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.health + 1) * 15, desc: "+15 Base Max HP" },
-                  { key: "speed", label: "Reactor Thrusters", icon: <Activity className="w-3.5 h-3.5" />, cost: (shopUpgrades.speed + 1) * 20, desc: "+10% Move speed" },
-                  { key: "magnet", label: "Quantum Harvester", icon: <Sparkles className="w-3.5 h-3.5" />, cost: (shopUpgrades.magnet + 1) * 15, desc: "+25px Attraction radius" },
-                  { key: "regen", label: "Nanite Repair Systems", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.regen + 1) * 25, desc: "+0.35 HP Regen/sec" },
-                ].map((item) => {
-                  const currentLvl = (shopUpgrades as any)[item.key];
-                  const maxed = currentLvl >= 5;
-                  const canBuy = payWithPiMode ? (typeof window !== "undefined" && (window as any).Pi) : (metaGold >= item.cost);
-                  
-                  return (
-                    <div key={item.key} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border-2 border-brand-border">
-                      <div className="flex-1 min-w-0 pr-2">
-                        <div className="flex items-center space-x-1.5">
-                          <span className={payWithPiMode ? "text-purple-600" : "text-brand-accent"}>{item.icon}</span>
-                          <span className="text-[11px] font-bold font-display uppercase tracking-wide text-slate-800">{item.label}</span>
-                        </div>
-                        <span className="text-[9px] text-brand-muted block leading-tight mt-0.5 font-sans">{item.desc}</span>
-                        {/* Custom analog power levels block indicator */}
-                        <div className="flex space-x-1 mt-1.5">
-                          {[1, 2, 3, 4, 5].map((i) => (
-                            <div
-                              key={i}
-                              className={`w-3.5 h-2 border border-brand-border ${
-                                i <= currentLvl
-                                  ? payWithPiMode
-                                    ? "bg-purple-600 border-purple-600"
-                                    : "bg-brand-accent border-brand-accent"
-                                  : "bg-slate-200"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <button
-                        disabled={maxed || !canBuy}
-                        onClick={() => buyShopUpgrade(item.key as any, item.cost)}
-                        className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer min-w-[72px] rounded-lg ${
-                          maxed
-                            ? "bg-slate-100 text-brand-muted/40 border-brand-border"
-                            : payWithPiMode
-                            ? "bg-purple-600 hover:bg-purple-500 text-white border-purple-500 hover:border-purple-400"
-                            : metaGold >= item.cost
-                            ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
-                            : "bg-slate-100 text-brand-muted/50 border-brand-border"
-                        }`}
-                      >
-                        {maxed ? (
-                          <span>MAXED</span>
-                        ) : payWithPiMode ? (
-                          <>
-                            <span className="text-[8px] opacity-85 uppercase leading-none">Pi Pay</span>
-                            <span className="font-bold mt-0.5">{(item.cost * 0.001).toFixed(3)}π</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[8px] opacity-80 uppercase leading-none">Upgrade</span>
-                            <span className="font-bold mt-0.5">{item.cost}¢</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+              {/* API Configuration Status Indicator */}
+              <div className="mb-3.5 p-2 bg-slate-50 border border-brand-border rounded-lg text-[10px] space-y-1 font-sans">
+                <div className="flex items-center justify-between text-slate-600 font-medium">
+                  <span className="flex items-center space-x-1">
+                    <Shield className="w-3 h-3 text-brand-accent" />
+                    <span>Pi API Key (Backend):</span>
+                  </span>
+                  <span className={`font-bold font-mono px-1.5 py-0.5 rounded text-[8px] uppercase ${
+                    piApiKeyConfigured === true
+                      ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                      : piApiKeyConfigured === false
+                      ? "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                      : "bg-slate-100 text-slate-500"
+                  }`}>
+                    {piApiKeyConfigured === true ? "Connected" : piApiKeyConfigured === false ? "Not Configured" : "Checking..."}
+                  </span>
+                </div>
+                {piApiKeyConfigured === false && (
+                  <p className="text-[9px] text-rose-500 leading-normal font-medium bg-rose-50/50 p-1 rounded border border-rose-100">
+                    Vui lòng mở <strong>Settings</strong> trong AI Studio để thiết lập khóa <strong>PI_API_KEY</strong>. Giao dịch Pi sẽ lỗi nếu thiếu khóa này.
+                  </p>
+                )}
               </div>
+
+              {/* Tab Selector */}
+              <div className="flex border-b border-brand-border mb-3 text-xs bg-slate-50 p-1 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setShopTab("upgrades")}
+                  className={`flex-1 py-1.5 text-center font-display font-bold uppercase tracking-wider text-[9px] rounded-md transition cursor-pointer ${
+                    shopTab === "upgrades"
+                      ? "bg-purple-600 text-white shadow-sm font-extrabold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Systems Upgrades
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShopTab("exchange")}
+                  className={`flex-1 py-1.5 text-center font-display font-bold uppercase tracking-wider text-[9px] rounded-md transition cursor-pointer ${
+                    shopTab === "exchange"
+                      ? "bg-purple-600 text-white shadow-sm font-extrabold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Pi Exchange (Buy/Sell)
+                </button>
+              </div>
+
+              {shopTab === "upgrades" ? (
+                /* Individual Shop Upgrade Slots */
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
+                  {[
+                    { key: "damage", label: "Plasma Accelerators", icon: <Zap className="w-3.5 h-3.5" />, cost: (shopUpgrades.damage + 1) * 20, desc: "+15% Damage scaling" },
+                    { key: "health", label: "Nanoshield Armor", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.health + 1) * 15, desc: "+15 Base Max HP" },
+                    { key: "speed", label: "Reactor Thrusters", icon: <Activity className="w-3.5 h-3.5" />, cost: (shopUpgrades.speed + 1) * 20, desc: "+10% Move speed" },
+                    { key: "magnet", label: "Quantum Harvester", icon: <Sparkles className="w-3.5 h-3.5" />, cost: (shopUpgrades.magnet + 1) * 15, desc: "+25px Attraction radius" },
+                    { key: "regen", label: "Nanite Repair Systems", icon: <Heart className="w-3.5 h-3.5" />, cost: (shopUpgrades.regen + 1) * 25, desc: "+0.35 HP Regen/sec" },
+                  ].map((item) => {
+                    const currentLvl = (shopUpgrades as any)[item.key];
+                    const maxed = currentLvl >= 5;
+                    const canBuy = payWithPiMode ? (typeof window !== "undefined" && (window as any).Pi) : (metaGold >= item.cost);
+                    
+                    return (
+                      <div key={item.key} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border-2 border-brand-border">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="flex items-center space-x-1.5">
+                            <span className={payWithPiMode ? "text-purple-600" : "text-brand-accent"}>{item.icon}</span>
+                            <span className="text-[11px] font-bold font-display uppercase tracking-wide text-slate-800">{item.label}</span>
+                          </div>
+                          <span className="text-[9px] text-brand-muted block leading-tight mt-0.5 font-sans">{item.desc}</span>
+                          {/* Custom analog power levels block indicator */}
+                          <div className="flex space-x-1 mt-1.5">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                              <div
+                                key={i}
+                                className={`w-3.5 h-2 border border-brand-border ${
+                                  i <= currentLvl
+                                    ? payWithPiMode
+                                      ? "bg-purple-600 border-purple-600"
+                                      : "bg-brand-accent border-brand-accent"
+                                    : "bg-slate-200"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <button
+                          disabled={maxed || !canBuy}
+                          onClick={() => buyShopUpgrade(item.key as any, item.cost)}
+                          className={`px-3 py-1.5 border-2 font-mono text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer min-w-[72px] rounded-lg ${
+                            maxed
+                              ? "bg-slate-100 text-brand-muted/40 border-brand-border"
+                              : payWithPiMode
+                              ? "bg-purple-600 hover:bg-purple-500 text-white border-purple-500 hover:border-purple-400"
+                              : metaGold >= item.cost
+                              ? "bg-brand-accent hover:bg-amber-600 text-white border-brand-accent"
+                              : "bg-slate-100 text-brand-muted/50 border-brand-border"
+                          }`}
+                        >
+                          {maxed ? (
+                            <span>MAXED</span>
+                          ) : payWithPiMode ? (
+                            <>
+                              <span className="text-[8px] opacity-85 uppercase leading-none">Pi Pay</span>
+                              <span className="font-bold mt-0.5">{(item.cost * 0.001).toFixed(3)}π</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[8px] opacity-80 uppercase leading-none">Upgrade</span>
+                              <span className="font-bold mt-0.5">{item.cost}¢</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Pi Exchange Panel */
+                <div className="space-y-3.5 max-h-[190px] overflow-y-auto pr-1">
+                  <div className="p-2 bg-purple-50 rounded-lg border border-purple-100 text-[9px] font-mono leading-normal text-purple-700">
+                    <span className="font-extrabold text-purple-800 uppercase block mb-1">Giao dịch phi tập trung:</span>
+                    • Nạp: 1 Pi Testnet = 10,000 Xu (¢)<br />
+                    • Rút: 20,000 Xu (¢) = 1 Pi Testnet<br />
+                    • Rút tối thiểu: 500 Xu (¢)
+                  </div>
+
+                  {/* Buy options */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-bold font-display uppercase tracking-wider text-slate-500 block">
+                      🛒 Nạp Xu (Trả Pi từ Ví)
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { coins: 100, pi: 0.01 },
+                        { coins: 500, pi: 0.05 },
+                        { coins: 1000, pi: 0.10 },
+                        { coins: 5000, pi: 0.50 }
+                      ].map((pkg) => (
+                        <button
+                          key={pkg.coins}
+                          onClick={() => buyCoinsWithPi(pkg.coins, pkg.pi)}
+                          className="p-1.5 border border-purple-200 hover:border-purple-500 bg-white hover:bg-purple-50/30 transition text-left rounded-lg cursor-pointer flex flex-col justify-between shadow-sm"
+                        >
+                          <span className="text-[10px] font-mono font-bold text-slate-800">+{pkg.coins} Xu</span>
+                          <span className="text-[8px] font-bold font-mono text-purple-600 mt-0.5">{pkg.pi} π</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sell options */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-bold font-display uppercase tracking-wider text-slate-500 block">
+                      💰 Rút Xu (Nhận Pi về Ví)
+                    </span>
+                    {piUser ? (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { coins: 500, pi: 0.025 },
+                          { coins: 1000, pi: 0.05 },
+                          { coins: 2000, pi: 0.10 },
+                          { coins: 5000, pi: 0.25 }
+                        ].map((pkg) => {
+                          const disabled = metaGold < pkg.coins;
+                          return (
+                            <button
+                              key={pkg.coins}
+                              disabled={disabled}
+                              onClick={() => sellCoinsForPi(pkg.coins, pkg.pi)}
+                              className={`p-1.5 border transition text-left rounded-lg cursor-pointer flex flex-col justify-between shadow-sm ${
+                                disabled
+                                  ? "opacity-45 border-slate-200 bg-slate-50 cursor-not-allowed"
+                                  : "border-amber-200 hover:border-amber-500 bg-white hover:bg-amber-50/20"
+                              }`}
+                            >
+                              <span className="text-[10px] font-mono font-bold text-slate-800">-{pkg.coins} Xu</span>
+                              <span className="text-[8px] font-bold font-mono text-amber-600 mt-0.5">+{pkg.pi} π</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-center text-[9px] text-slate-500 font-medium">
+                        Vui lòng kết nối ví Pi để thực hiện chức năng Bán Xu.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* High Scores list */}

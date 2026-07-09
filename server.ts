@@ -20,6 +20,15 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", mode: process.env.NODE_ENV });
 });
 
+// Endpoint to check backend PI_API_KEY integration status securely
+app.get("/api/pi/status", (req, res) => {
+  res.json({
+    success: true,
+    configured: !!process.env.PI_API_KEY,
+    sandbox: process.env.VITE_PI_SANDBOX !== "false",
+  });
+});
+
 // Helper function to call Pi Network Platform API
 async function callPiApi(endpoint: string, method: string, body?: any) {
   const apiKey = process.env.PI_API_KEY;
@@ -49,6 +58,38 @@ async function callPiApi(endpoint: string, method: string, body?: any) {
 
   return response.json();
 }
+
+// 0. AUTHENTICATE / VALIDATE user endpoint
+app.post("/api/pi/authenticate", async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "accessToken is required" });
+    }
+
+    console.log(`[Pi Backend] Validating pioneer access token against Pi Platform API...`);
+    const response = await fetch("https://api.minepi.com/v2/me", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Pi Backend] Pi Platform API token validation failed (status ${response.status}): ${errorText}`);
+      return res.status(response.status).json({ error: `Pi Network API token validation failed: ${errorText}` });
+    }
+
+    const userData = await response.json();
+    console.log("[Pi Backend] Pioneer validation successful. User data:", userData);
+
+    res.json({ success: true, user: userData });
+  } catch (error: any) {
+    console.error("[Pi Backend] Exception during user authentication:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // 1. APPROVE payment endpoint
 app.post("/api/pi/approve", async (req, res) => {
@@ -84,6 +125,77 @@ app.post("/api/pi/complete", async (req, res) => {
     res.json({ success: true, result });
   } catch (error: any) {
     console.error("[Pi Backend] Error completing payment:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. SELL coins (App-to-User payment) endpoint
+app.post("/api/pi/sell", async (req, res) => {
+  try {
+    const { uid, username, amountCoins, piAmount } = req.body;
+    if (!uid || !amountCoins || !piAmount) {
+      return res.status(400).json({ error: "Missing uid, amountCoins, or piAmount" });
+    }
+
+    console.log(`[Pi Backend] Process sell request: Pioneer @${username || uid} wants to sell ${amountCoins} xu for ${piAmount} Pi`);
+
+    // Verify if API Key is configured
+    const apiKey = process.env.PI_API_KEY;
+    if (!apiKey) {
+      console.log(`[Pi Backend] PI_API_KEY is not configured. Simulating transaction on sandbox/test mode.`);
+      return res.json({
+        success: true,
+        simulated: true,
+        message: "No PI_API_KEY configured. Transaction simulated successfully.",
+        amountCoins,
+        piAmount
+      });
+    }
+
+    // Try to perform a real App-to-User payment on Pi Platform API
+    try {
+      console.log(`[Pi Backend] Requesting Pi Platform to create App-to-User payment...`);
+      const paymentResponse = await callPiApi("/v2/payments", "POST", {
+        payment: {
+          amount: piAmount,
+          memo: `Thanh toan doi ${amountCoins} Xu sang Pi cho Pioneer ${username || uid}`,
+          metadata: { type: "sell_xu", xuAmount: amountCoins },
+          uid: uid
+        }
+      });
+
+      console.log(`[Pi Backend] App-to-User payment created on Pi API:`, paymentResponse);
+
+      const walletSeed = process.env.PI_WALLET_SEED;
+      if (!walletSeed) {
+        console.warn(`[Pi Backend] PI_WALLET_SEED is not configured. App cannot automatically sign the transaction.`);
+        return res.json({
+          success: true,
+          simulated: true,
+          message: "Payment created on Pi Platform, but PI_WALLET_SEED is missing to complete blockchain signing automatically. Simulated transaction.",
+          payment: paymentResponse
+        });
+      }
+
+      res.json({
+        success: true,
+        simulated: false,
+        payment: paymentResponse
+      });
+
+    } catch (apiError: any) {
+      console.warn(`[Pi Backend] Pi Platform API error, falling back to simulated transaction in Sandbox:`, apiError.message);
+      res.json({
+        success: true,
+        simulated: true,
+        message: `Simulation fallback: Pi Platform API returned: ${apiError.message}`,
+        amountCoins,
+        piAmount
+      });
+    }
+
+  } catch (error: any) {
+    console.error("[Pi Backend] Error processing sell request:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
