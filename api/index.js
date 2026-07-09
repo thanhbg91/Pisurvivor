@@ -151,6 +151,15 @@ app.post("/api/pi/sell", async (req, res) => {
       });
     }
 
+    // Since API Key is configured, we require a Wallet Seed to perform real payouts
+    const walletSeed = process.env.PI_WALLET_SEED;
+    if (!walletSeed) {
+      console.error(`[Pi Backend] PI_WALLET_SEED is missing while PI_API_KEY is configured. Cannot process App-to-User payouts without a signing seed.`);
+      return res.status(400).json({
+        error: "Server configuration missing: PI_WALLET_SEED is required for App-to-User payouts. Vui lòng cấu hình Wallet Seed trên Server của bạn."
+      });
+    }
+
     // Try to perform a real App-to-User payment on Pi Platform API
     try {
       console.log(`[Pi Backend] Requesting Pi Platform to create App-to-User payment...`);
@@ -164,17 +173,6 @@ app.post("/api/pi/sell", async (req, res) => {
       });
 
       console.log(`[Pi Backend] App-to-User payment created on Pi API:`, paymentResponse);
-
-      const walletSeed = process.env.PI_WALLET_SEED;
-      if (!walletSeed) {
-        console.warn(`[Pi Backend] PI_WALLET_SEED is not configured. App cannot automatically sign the transaction.`);
-        return res.json({
-          success: true,
-          simulated: true,
-          message: "Payment created on Pi Platform, but PI_WALLET_SEED is missing to complete blockchain signing automatically. Simulated transaction.",
-          payment: paymentResponse
-        });
-      }
 
       console.log(`[Pi Backend] PI_WALLET_SEED is configured. Proceeding with real blockchain signing of App-to-User payout...`);
       const paymentId = paymentResponse.id;
@@ -208,13 +206,9 @@ app.post("/api/pi/sell", async (req, res) => {
       });
 
     } catch (apiError) {
-      console.warn(`[Pi Backend] Pi Platform API error, falling back to simulated transaction in Sandbox:`, apiError.message);
-      res.json({
-        success: true,
-        simulated: true,
-        message: `Simulation fallback: Pi Platform API returned: ${apiError.message}`,
-        amountCoins,
-        piAmount
+      console.error(`[Pi Backend] Pi Platform API error during App-to-User payment:`, apiError);
+      return res.status(500).json({
+        error: `Lỗi Pi Platform API: ${apiError.message || apiError}. Vui lòng kiểm tra ví Developer (đủ số dư rút Pi?) hoặc Key cấu hình.`
       });
     }
 

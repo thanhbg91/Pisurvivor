@@ -158,6 +158,7 @@ export default function App() {
   const [piAuthenticated, setPiAuthenticated] = useState(false);
   const [piPaymentStatus, setPiPaymentStatus] = useState<"idle" | "authenticating" | "creating" | "approving" | "completing" | "success" | "error" | "cancelled">("idle");
   const [piPaymentError, setPiPaymentError] = useState("");
+  const [piPaymentType, setPiPaymentType] = useState<"buy" | "sell" | "">("");
   const [payWithPiMode, setPayWithPiMode] = useState(() => {
     if (typeof window !== "undefined") {
       return !!(window as any).Pi;
@@ -1213,6 +1214,7 @@ export default function App() {
 
   const buyCoinsWithPi = (amountCoins: number, piAmount: number) => {
     if (payWithPiMode && (window as any).Pi) {
+      setPiPaymentType("buy");
       setPiPaymentStatus("creating");
       setPiPaymentError("");
 
@@ -1334,6 +1336,7 @@ export default function App() {
       return;
     }
 
+    setPiPaymentType("sell");
     setPiPaymentStatus("creating");
     setPiPaymentError("");
 
@@ -1379,9 +1382,10 @@ export default function App() {
         
         if (data.simulated) {
           setPiPaymentStatus("success");
-          setPiPaymentError(`Thành công (Simulated)! Nhận ${piAmount} π. (Chưa cấu hình Wallet Seed)`);
+          setPiPaymentError(`[MÔ PHỎNG] ${piAmount} π (Chưa cấu hình PI_WALLET_SEED trên Server)`);
         } else {
           setPiPaymentStatus("success");
+          setPiPaymentError(`${piAmount} π`);
         }
       } else {
         throw new Error("Phản hồi không hợp lệ từ máy chủ.");
@@ -1390,7 +1394,7 @@ export default function App() {
       setTimeout(() => {
         setPiPaymentStatus("idle");
         setPiPaymentError("");
-      }, 5000);
+      }, 7000);
     } catch (err: any) {
       console.warn("[Pi SDK] Failed to sell xu:", err);
       setPiPaymentStatus("error");
@@ -3077,20 +3081,35 @@ export default function App() {
               <div className="space-y-1.5">
                 <h3 className="text-sm font-extrabold tracking-tight text-slate-800 font-display uppercase">
                   {piPaymentStatus === "authenticating" && "System Authentication"}
-                  {piPaymentStatus === "creating" && "Initiating Transaction"}
-                  {piPaymentStatus === "approving" && "Requesting Server Approval"}
-                  {piPaymentStatus === "completing" && "Finalizing On Blockchain"}
-                  {piPaymentStatus === "success" && "Upgrade Authenticated"}
+                  {piPaymentStatus === "creating" && (piPaymentType === "sell" ? "Khởi Tạo Rút Pi" : "Initiating Transaction")}
+                  {piPaymentStatus === "approving" && (piPaymentType === "sell" ? "Xác Minh Giao Dịch" : "Requesting Server Approval")}
+                  {piPaymentStatus === "completing" && (piPaymentType === "sell" ? "Hoàn Tất Trên Blockchain" : "Finalizing On Blockchain")}
+                  {piPaymentStatus === "success" && (piPaymentType === "sell" ? "Rút Pi Thành Công" : "Upgrade Authenticated")}
                   {piPaymentStatus === "cancelled" && "Transaction Aborted"}
-                  {piPaymentStatus === "error" && "Checkout Protocol Error"}
+                  {piPaymentStatus === "error" && (piPaymentType === "sell" ? "Lỗi Rút Pi Về Ví" : "Checkout Protocol Error")}
                 </h3>
                 <p className="text-[10px] text-brand-muted font-mono leading-relaxed">
                   {piPaymentStatus === "authenticating" && "Synchronizing local pioneer telemetry with Pi Network authentication core..."}
-                  {piPaymentStatus === "creating" && "Registering checkout payload on decentralized ledger. Standby..."}
-                  {piPaymentStatus === "approving" && "Waiting for off-chain developer endpoints to validate checkout authenticity..."}
-                  {piPaymentStatus === "completing" && "Pioneer signed transaction! Transmitting stellar ledger proof for decentralized finalization..."}
-                  {piPaymentStatus === "success" && "Pi Network ledger validated successfully. Upgrades downloaded and applied to hull."}
-                  {piPaymentStatus === "cancelled" && "System aborted checkout. Hull telemetry safe."}
+                  {piPaymentStatus === "creating" && (piPaymentType === "sell" 
+                    ? "Đang gửi yêu cầu khởi tạo giao dịch rút Pi về ví. Vui lòng đợi..."
+                    : "Registering checkout payload on decentralized ledger. Standby..."
+                  )}
+                  {piPaymentStatus === "approving" && (piPaymentType === "sell"
+                    ? "Hệ thống đang xác thực số dư và ký duyệt giao dịch thanh toán..."
+                    : "Waiting for off-chain developer endpoints to validate checkout authenticity..."
+                  )}
+                  {piPaymentStatus === "completing" && (piPaymentType === "sell"
+                    ? "Đang gửi chữ ký và phát sóng giao dịch lên blockchain Pi Network..."
+                    : "Pioneer signed transaction! Transmitting stellar ledger proof for decentralized finalization..."
+                  )}
+                  {piPaymentStatus === "success" && (piPaymentType === "sell" 
+                    ? `Giao dịch chuyển thành công ${piPaymentError || "Pi"} về ví của bạn.`
+                    : "Pi Network ledger validated successfully. Upgrades downloaded and applied to hull."
+                  )}
+                  {piPaymentStatus === "cancelled" && (piPaymentType === "sell"
+                    ? "Yêu cầu rút Pi của bạn đã bị hủy bỏ."
+                    : "System aborted checkout. Hull telemetry safe."
+                  )}
                   {piPaymentStatus === "error" && piPaymentError}
                 </p>
               </div>
