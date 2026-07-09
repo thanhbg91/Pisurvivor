@@ -950,7 +950,7 @@ export default function App() {
       // 1. Ensure Pi.init is treated as a Promise and fully awaited
       if (!(window as any).__piInitialized) {
         console.log(`[Pi SDK] Initializing Pi SDK in ${sandboxMode ? "sandbox" : "production"} mode...`);
-        await Pi.init({ version: "1.5", sandbox: sandboxMode });
+        await Pi.init({ version: "2.0", sandbox: sandboxMode });
         (window as any).__piInitialized = true;
         console.log("[Pi SDK] Pi SDK Initialized successfully.");
       } else {
