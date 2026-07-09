@@ -892,13 +892,46 @@ export default function App() {
   // ==========================================
   // PERMANENT META UPGRADE SHOP HANDLERS
   // ==========================================
-  const handlePiAuth = async () => {
+  const handlePiAuth = async (force = false) => {
     if (typeof window === "undefined" || !(window as any).Pi) {
       console.log("[Pi SDK] Pi SDK not available.");
       return;
     }
     const Pi = (window as any).Pi;
-    const sandboxMode = (import.meta as any).env?.VITE_PI_SANDBOX !== "false";
+    
+    // Dynamic sandbox detection to support local testing & live production deployments in Pi Browser
+    const getSandboxMode = () => {
+      const envSandbox = (import.meta as any).env?.VITE_PI_SANDBOX;
+      if (envSandbox === "true") return true;
+      if (envSandbox === "false") return false;
+
+      if (typeof window !== "undefined") {
+        const hostname = window.location.hostname;
+        if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.startsWith("192.168.")) {
+          return true;
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get("sandbox") === "true") return true;
+        if (urlParams.get("sandbox") === "false") return false;
+        
+        try {
+          if (window.self !== window.top) {
+            const referrer = document.referrer;
+            if (referrer && referrer.includes("sandbox.minepi.com")) {
+              return true;
+            }
+          }
+        } catch (e) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const sandboxMode = getSandboxMode();
+
+    if (force) {
+      (window as any).__piAuthenticating = false;
+    }
 
     if ((window as any).__piAuthenticating) {
       console.log("[Pi SDK] Authentication is already in progress, skipping duplicate call.");
@@ -2390,7 +2423,7 @@ export default function App() {
                       <span className="text-purple-600 font-bold">@{piUser.username}</span>
                     ) : (
                       <button
-                        onClick={handlePiAuth}
+                        onClick={() => handlePiAuth(true)}
                         disabled={piPaymentStatus === "authenticating"}
                         className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded cursor-pointer transition duration-150 shadow-sm"
                       >
@@ -2398,6 +2431,12 @@ export default function App() {
                       </button>
                     )}
                   </div>
+
+                  {piPaymentError && !piUser && (
+                    <div className="text-[9px] text-rose-500 font-mono mt-1 leading-normal border-t border-purple-100/50 pt-1">
+                      ⚠️ Lỗi: {piPaymentError}
+                    </div>
+                  )}
                   
                   {/* Mode switcher toggle */}
                   <div className="flex items-center justify-between bg-white p-1 rounded border border-purple-200/50">
