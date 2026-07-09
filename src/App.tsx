@@ -2532,7 +2532,7 @@ export default function App() {
                 </div>
                 {piApiKeyConfigured === false && (
                   <p className="text-[9px] text-rose-500 leading-normal font-medium bg-rose-50/50 p-1 rounded border border-rose-100">
-                    Vui lòng mở <strong>Settings</strong> trong AI Studio để thiết lập khóa <strong>PI_API_KEY</strong>. Giao dịch Pi sẽ lỗi nếu thiếu khóa này.
+                    Vui lòng mở <strong>Settings</strong> trong AI Studio (hoặc cấu hình <strong>Environment Variables</strong> trên <strong>Vercel Dashboard</strong> nếu bạn đã deploy) để thiết lập khóa <strong>PI_API_KEY</strong>. Giao dịch Pi sẽ lỗi nếu thiếu khóa này.
                   </p>
                 )}
               </div>

@@ -202,6 +202,11 @@ app.post("/api/pi/sell", async (req, res) => {
 
 // Vite middleware for dev or Static asset serving for production
 async function setupVite() {
+  if (process.env.VERCEL) {
+    console.log("[Pi Backend] Running in Vercel Serverless environment. Skipping app.listen.");
+    return;
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -222,3 +227,5 @@ async function setupVite() {
 }
 
 setupVite();
+
+export default app;
