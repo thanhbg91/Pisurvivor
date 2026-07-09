@@ -909,6 +909,13 @@ if (!(window as any).__piInitialized) {
       (window as any).__piInitialized = true;
       console.log(`[Pi SDK] Pi SDK Initialized!`);
       if (typeof setPiPaymentStatus === 'function') setPiPaymentStatus('ready');
+          (window as any).Pi.authenticate(['username', 'payments'], (payment: any) => {
+      console.log('Giao dịch chưa hoàn thành:', payment);
+    }).then((auth: any) => {
+      console.log('Đăng nhập Pi thành công:', auth.user.username);
+    }).catch((error: any) => {
+      console.error('Lỗi xác thực Pi:', error);
+    });
       
     } catch (err: any) {
       console.warn("[Pi SDK] Error during Pi.init, masking as initialized", err);
