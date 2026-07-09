@@ -985,23 +985,40 @@ export default function App() {
       console.log("[Pi SDK] Client authentication successful. Verifying token on backend...", auth);
 
       // 3. Send access token to backend for authorization check (v2/me)
-      const res = await fetch("/api/pi/authenticate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ accessToken: auth.accessToken }),
-      });
+      let validatedUser = auth.user;
+      try {
+        const res = await fetch("/api/pi/authenticate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ accessToken: auth.accessToken }),
+        });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Backend token validation failed");
+        const contentType = res.headers.get("content-type");
+        const isJson = contentType && contentType.includes("application/json");
+
+        if (!res.ok) {
+          let errorMsg = "Backend token validation failed";
+          if (isJson) {
+            const errorData = await res.json();
+            errorMsg = errorData.error || errorMsg;
+          } else {
+            console.warn("[Pi SDK] Backend returned HTML error/404 page. Using client fallback.");
+            // Do not throw, we want to proceed with client-side fallback
+          }
+        } else {
+          if (isJson) {
+            const backendData = await res.json();
+            console.log("[Pi SDK] Backend verification succeeded. Established session for user:", backendData.user);
+            validatedUser = backendData.user || auth.user;
+          } else {
+            console.warn("[Pi SDK] Backend did not return JSON. Falling back to client-side auth details.");
+          }
+        }
+      } catch (backendErr: any) {
+        console.warn("[Pi SDK] Backend verification warning (using fallback client auth):", backendErr);
       }
-
-      const backendData = await res.json();
-      console.log("[Pi SDK] Backend verification succeeded. Established session for user:", backendData.user);
-
-      const validatedUser = backendData.user || auth.user;
 
       // Store globally to retain state across mounts/StrictMode re-renders
       (window as any).__piUser = validatedUser;
@@ -1015,7 +1032,8 @@ export default function App() {
       if ((window as any).__setPiAuthenticated) (window as any).__setPiAuthenticated(true);
       else setPiAuthenticated(true);
 
-      if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
+      if ((window as any).__setPayWithPayWithPiMode) (window as any).__setPayWithPayWithPiMode(true);
+      else if ((window as any).__setPayWithPiMode) (window as any).__setPayWithPiMode(true);
       else setPayWithPiMode(true);
 
       if ((window as any).__setPiPaymentStatus) (window as any).__setPiPaymentStatus("idle");
@@ -1036,7 +1054,14 @@ export default function App() {
   useEffect(() => {
     // 1. Fetch backend configuration status
     fetch("/api/pi/status")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Status API returned non-200");
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        throw new Error("Response was not JSON (probably HTML or 404 page)");
+      })
       .then((data) => {
         if (data && typeof data.configured === "boolean") {
           const setter = (window as any).__setPiApiKeyConfigured || setPiApiKeyConfigured;
@@ -1044,7 +1069,7 @@ export default function App() {
         }
       })
       .catch((err) => {
-        console.warn("[Pi SDK] Failed to fetch backend status:", err);
+        console.warn("[Pi SDK] Failed to fetch backend status safely:", err);
         const setter = (window as any).__setPiApiKeyConfigured || setPiApiKeyConfigured;
         setter(false);
       });
@@ -1093,15 +1118,19 @@ export default function App() {
               })
                 .then((res) => {
                   if (!res.ok) throw new Error("Approval server endpoint returned non-200");
-                  return res.json();
+                  const contentType = res.headers.get("content-type");
+                  if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                  }
+                  throw new Error("Không thể kết nối Backend Server (Nhận phản hồi HTML thay vì JSON). Bạn có đang chạy trên Vercel không? Hãy đổi sang chế độ '¢ Credits' ở trên để nâng cấp.");
                 })
                 .then((data) => {
                   console.log("[Pi SDK] Server approved payment successfully:", data);
                 })
-                .catch((err) => {
+                .catch((err: any) => {
                   console.warn("[Pi SDK] Server approval failed:", err);
                   setPiPaymentStatus("error");
-                  setPiPaymentError("Failed to approve payment with the server.");
+                  setPiPaymentError(err?.message || "Failed to approve payment with the server.");
                 });
             },
             onReadyForServerCompletion: (paymentId: string, txid: string) => {
@@ -1115,7 +1144,11 @@ export default function App() {
               })
                 .then((res) => {
                   if (!res.ok) throw new Error("Completion server endpoint returned non-200");
-                  return res.json();
+                  const contentType = res.headers.get("content-type");
+                  if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                  }
+                  throw new Error("Không thể kết nối Backend Server (Nhận phản hồi HTML thay vì JSON).");
                 })
                 .then((data) => {
                   console.log("[Pi SDK] Server completed payment successfully:", data);
@@ -1203,15 +1236,19 @@ export default function App() {
               })
                 .then((res) => {
                   if (!res.ok) throw new Error("Approval server endpoint returned non-200");
-                  return res.json();
+                  const contentType = res.headers.get("content-type");
+                  if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                  }
+                  throw new Error("Không thể kết nối Backend Server (Nhận phản hồi HTML thay vì JSON).");
                 })
                 .then((data) => {
                   console.log("[Pi SDK] Server approved Buy Xu payment successfully:", data);
                 })
-                .catch((err) => {
+                .catch((err: any) => {
                   console.warn("[Pi SDK] Server approval for Buy Xu failed:", err);
                   setPiPaymentStatus("error");
-                  setPiPaymentError("Phê duyệt thanh toán từ Server thất bại.");
+                  setPiPaymentError(err?.message || "Phê duyệt thanh toán từ Server thất bại.");
                 });
             },
             onReadyForServerCompletion: (paymentId: string, txid: string) => {
@@ -1225,7 +1262,11 @@ export default function App() {
               })
                 .then((res) => {
                   if (!res.ok) throw new Error("Completion server endpoint returned non-200");
-                  return res.json();
+                  const contentType = res.headers.get("content-type");
+                  if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                  }
+                  throw new Error("Không thể kết nối Backend Server (Nhận phản hồi HTML thay vì JSON).");
                 })
                 .then((data) => {
                   console.log("[Pi SDK] Server completed Buy Xu payment successfully:", data);
@@ -1309,28 +1350,41 @@ export default function App() {
         }),
       });
 
+      const contentType = res.headers.get("content-type");
+      const isJson = contentType && contentType.includes("application/json");
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Giao dịch bán xu bị từ chối từ Server.");
+        let errorMsg = "Giao dịch bán xu bị từ chối từ Server.";
+        if (isJson) {
+          const errorData = await res.json();
+          errorMsg = errorData.error || errorMsg;
+        } else {
+          errorMsg = "Không thể kết nối Backend Server (Nhận phản hồi HTML thay vì JSON). Vui lòng cấu hình Backend Server.";
+        }
+        throw new Error(errorMsg);
       }
 
-      const data = await res.json();
-      console.log("[Pi SDK] Backend sell response:", data);
+      if (isJson) {
+        const data = await res.json();
+        console.log("[Pi SDK] Backend sell response:", data);
 
-      // Deduct coins in client
-      setMetaGold((prev: number) => {
-        const next = Math.max(0, prev - amountCoins);
-        localStorage.setItem("pioneer_meta_gold", String(next));
-        return next;
-      });
+        // Deduct coins in client
+        setMetaGold((prev: number) => {
+          const next = Math.max(0, prev - amountCoins);
+          localStorage.setItem("pioneer_meta_gold", String(next));
+          return next;
+        });
 
-      playSfx("upgrade");
-      
-      if (data.simulated) {
-        setPiPaymentStatus("success");
-        setPiPaymentError(`Thành công (Simulated)! Nhận ${piAmount} π. (Chưa cấu hình Wallet Seed)`);
+        playSfx("upgrade");
+        
+        if (data.simulated) {
+          setPiPaymentStatus("success");
+          setPiPaymentError(`Thành công (Simulated)! Nhận ${piAmount} π. (Chưa cấu hình Wallet Seed)`);
+        } else {
+          setPiPaymentStatus("success");
+        }
       } else {
-        setPiPaymentStatus("success");
+        throw new Error("Phản hồi không hợp lệ từ máy chủ.");
       }
 
       setTimeout(() => {
