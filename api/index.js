@@ -28,14 +28,14 @@ app.get("/api/pi/status", (req, res) => {
 });
 
 // Helper function to call Pi Network Platform API
-async function callPiApi(endpoint: string, method: string, body?: any) {
+async function callPiApi(endpoint, method, body) {
   const apiKey = process.env.PI_API_KEY;
   if (!apiKey) {
     throw new Error("PI_API_KEY is not configured in the server environment variables.");
   }
 
   const url = `https://api.minepi.com${endpoint}`;
-  const headers: Record<string, string> = {
+  const headers = {
     Authorization: `Key ${apiKey}`,
   };
 
@@ -83,7 +83,7 @@ app.post("/api/pi/authenticate", async (req, res) => {
     console.log("[Pi Backend] Pioneer validation successful. User data:", userData);
 
     res.json({ success: true, user: userData });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Pi Backend] Exception during user authentication:", error.message);
     res.status(500).json({ error: error.message });
   }
@@ -102,7 +102,7 @@ app.post("/api/pi/approve", async (req, res) => {
     console.log(`[Pi Backend] Payment ${paymentId} approved successfully:`, result);
 
     res.json({ success: true, result });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Pi Backend] Error approving payment:", error.message);
     res.status(500).json({ error: error.message });
   }
@@ -121,7 +121,7 @@ app.post("/api/pi/complete", async (req, res) => {
     console.log(`[Pi Backend] Payment ${paymentId} completed successfully:`, result);
 
     res.json({ success: true, result });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Pi Backend] Error completing payment:", error.message);
     res.status(500).json({ error: error.message });
   }
@@ -181,7 +181,7 @@ app.post("/api/pi/sell", async (req, res) => {
         payment: paymentResponse
       });
 
-    } catch (apiError: any) {
+    } catch (apiError) {
       console.warn(`[Pi Backend] Pi Platform API error, falling back to simulated transaction in Sandbox:`, apiError.message);
       res.json({
         success: true,
@@ -192,7 +192,7 @@ app.post("/api/pi/sell", async (req, res) => {
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Pi Backend] Error processing sell request:", error.message);
     res.status(500).json({ error: error.message });
   }
