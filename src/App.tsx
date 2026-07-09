@@ -908,6 +908,8 @@ if (!(window as any).__piInitialized) {
 
       (window as any).__piInitialized = true;
       console.log(`[Pi SDK] Pi SDK Initialized!`);
+      if (typeof setPiPaymentStatus === 'function') setPiPaymentStatus('ready');
+      
     } catch (err: any) {
       console.warn("[Pi SDK] Error during Pi.init, masking as initialized", err);
       const errMsg = err?.message || String(err);
