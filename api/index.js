@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import { TransactionBuilder, Keypair } from "@stellar/stellar-sdk";
 
 dotenv.config();
 
@@ -155,7 +156,7 @@ app.post("/api/pi/sell", async (req, res) => {
       console.log(`[Pi Backend] Requesting Pi Platform to create App-to-User payment...`);
       const paymentResponse = await callPiApi("/v2/payments", "POST", {
         payment: {
-          amount: piAmount,
+          amount: Number(piAmount),
           memo: `Thanh toan doi ${amountCoins} Xu sang Pi cho Pioneer ${username || uid}`,
           metadata: { type: "sell_xu", xuAmount: amountCoins },
           uid: uid
@@ -175,10 +176,35 @@ app.post("/api/pi/sell", async (req, res) => {
         });
       }
 
-      res.json({
+      console.log(`[Pi Backend] PI_WALLET_SEED is configured. Proceeding with real blockchain signing of App-to-User payout...`);
+      const paymentId = paymentResponse.id;
+      const txEnvelope = paymentResponse.network_tx_envelope;
+      
+      const passphrase = process.env.VITE_PI_SANDBOX !== "false" ? "Pi Testnet" : "Pi Network";
+      console.log(`[Pi Backend] Using Network Passphrase: "${passphrase}"`);
+      
+      // Load and sign transaction
+      const tx = TransactionBuilder.fromEnvelope(txEnvelope, { networkPassphrase: passphrase });
+      const keypair = Keypair.fromSecret(walletSeed);
+      tx.sign(keypair);
+      
+      const txid = tx.hash().toString('hex');
+      console.log(`[Pi Backend] Transaction signed. TXID: ${txid}. Submitting to Pi Network Platform...`);
+      
+      // Submit A2U payment
+      const submitResponse = await callPiApi(`/v2/payments/${paymentId}/submit`, "POST", { txid });
+      console.log(`[Pi Backend] Payment submitted successfully. Response:`, submitResponse);
+      
+      // Complete A2U payment
+      console.log(`[Pi Backend] Completing payment acknowledgement...`);
+      const completeResponse = await callPiApi(`/v2/payments/${paymentId}/complete`, "POST", { txid });
+      console.log(`[Pi Backend] Payment completed successfully. Response:`, completeResponse);
+      
+      return res.json({
         success: true,
         simulated: false,
-        payment: paymentResponse
+        txid,
+        payment: completeResponse
       });
 
     } catch (apiError) {
